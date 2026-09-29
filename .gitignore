@@ -1,0 +1,13 @@
+# Environment
+.venv/
+__pycache__/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+.DS_Store
+
+# Raw downloads are a local cache (dated snapshots, tens of MB). They are
+# re-created by `erm fetch`; data/sample/ holds a small committed extract.
+data/raw/*
+!data/raw/.gitkeep
