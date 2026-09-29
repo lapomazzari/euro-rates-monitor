@@ -2,7 +2,7 @@
 
 [![tests](https://github.com/lapomazzari/euro-rates-monitor/actions/workflows/tests.yml/badge.svg)](https://github.com/lapomazzari/euro-rates-monitor/actions/workflows/tests.yml) [![weekly-note](https://github.com/lapomazzari/euro-rates-monitor/actions/workflows/weekly-note.yml/badge.svg)](https://github.com/lapomazzari/euro-rates-monitor/actions/workflows/weekly-note.yml)
 
-Tracks the euro area government curve, extracts what it prices for ECB policy, and writes a one-page weekly market note with one command.
+Tracks the euro area government curve, extracts what it prices for ECB policy, and computes the figures and chart for a one-page weekly market note.
 
 <!-- headline:start -->
 ## Headline (curve as of 28 Sep 2026)
@@ -14,7 +14,7 @@ Tracks the euro area government curve, extracts what it prices for ECB policy, a
 - **Sovereign spread.** The all-issuer vs AAA spread at 10Y is **50bp**, at its one-year high.
 <!-- headline:end -->
 
-Latest note: [`notes/`](notes/). The headline above and the note are regenerated each week by `erm readme` and `erm note`.
+Notes: [`notes/`](notes/). The headline above is regenerated each week by `erm readme`.
 
 ![3M forward path from the AAA curve](figures/forward_path.png)
 
@@ -29,8 +29,9 @@ pip install -r requirements.lock && pip install --no-deps -e .
 erm fetch            # download every series into data/raw/<source>/<name>_<date>.csv
 erm build            # analytics -> data/processed/ (metrics_latest.json feeds the note)
 erm report           # charts -> figures/, plus a summary on stdout
-erm note             # weekly note -> notes/<date>.md (Claude drafts the prose)
-erm note --no-llm    # same note, fixed-template wording, no API call
+erm note             # scaffold for this week's note -> notes/<date>.md, to fill in by hand
+erm check-note notes/  # every number and date in each note must be in its figures file
+erm note --llm       # optional: Claude drafts the prose instead (needs ANTHROPIC_API_KEY)
 erm readme           # refresh the headline at the top of this README
 pytest               # curve maths, PCA, change logic, number validator
 ```
@@ -44,26 +45,18 @@ To re-run the walkthrough notebook: `pip install -e ".[notebook]"`, then open `n
 | Variable | What it does | Without it |
 |---|---|---|
 | `FRED_API_KEY` | `fetch` uses the official FRED API ([free key](https://fred.stlouisfed.org/docs/api/api_key.html)). | `fetch` falls back to FRED's public CSV download (`fredgraph.csv`). Same data, same cache format. |
-| `ANTHROPIC_API_KEY` | `erm note` uses Claude to draft the prose. | Only `erm note --no-llm` works. |
+| `ANTHROPIC_API_KEY` | `erm note --llm` has Claude draft the prose. | Everything else works; `erm note` writes the scaffold. |
 | `ERM_MODEL` | Changes the model. | Default: `claude-opus-5-5`. |
 
-The API call enables Anthropic's server-side fallback: if a safety classifier declines the request, it is re-run on a fallback model instead of failing.
+The optional LLM call enables Anthropic's server-side fallback: if a safety classifier declines the request, it is re-run on a fallback model instead of failing.
 
-## How the note stays honest
+## The weekly note
 
-1. **Numbers come from one file.** `erm build` writes every figure the note may use to `data/processed/metrics_latest.json`, already rounded to the precision the note shows.
-2. **What Claude receives.** Only that dictionary, with instructions to:
-   - copy numbers exactly;
-   - do no arithmetic;
-   - add no outside knowledge;
-   - give no view on future policy.
-3. **Code decides what matters.** Code, not the model, picks the three moves for "what moved": the largest 1-week changes relative to a typical week over the past year.
-4. **Number check.** Every number in the returned text is extracted and matched against the dictionary. A re-rounded, summed or invented number fails the check. The run retries once, then exits with the offending numbers listed. Tenor labels (10Y, 2s10s, 3-month) and dates that appear in the dictionary are exempt.
-5. **Retention.** The last 12 notes are kept in `notes/`.
+The committed notes in `notes/` are written by hand from the figures `erm build` computes; `erm note` produces a scaffold with those figures, the dates and the chart, and a placeholder wherever prose goes. `erm check-note` extracts every number and date from a note and fails, listing the unmatched tokens, if any is not in that week's `data/processed/metrics_<date>.json`; CI runs it on every note. An optional LLM drafting mode (`erm note --llm`) exists behind that flag, and its output is marked unreviewed so it cannot pass the check until it has been edited by hand.
 
-**Continuous integration.** [`tests.yml`](.github/workflows/tests.yml) runs ruff and the test suite on every push. It works offline, from the committed sample and processed data.
+**Continuous integration.** [`tests.yml`](.github/workflows/tests.yml) runs ruff, the test suite and `erm check-note notes/` on every push. It works offline, from the committed sample and processed data.
 
-**Why the weekly job uses `--no-llm`.** The weekly GitHub Action ([`.github/workflows/weekly-note.yml`](.github/workflows/weekly-note.yml)) runs every Saturday with no repository secrets: ECB, the Fed Board and the FRED CSV endpoint are keyless. The LLM step would need `ANTHROPIC_API_KEY` stored as a secret, so the Action runs `--no-llm`, and the note it commits opens with a "Template note" label. The same run refreshes the README headline with `erm readme`.
+**Weekly refresh.** [`weekly-note.yml`](.github/workflows/weekly-note.yml) runs every Saturday with no repository secrets. It refreshes the data, figures and README headline and commits those; it writes that week's scaffold as a downloadable run artifact and never commits a note.
 
 ## Method
 
@@ -161,8 +154,8 @@ src/euro_rates_monitor/
   build.py        runs everything, writes data/processed/ and metrics_latest.json
   headline.py     README headline from the latest metrics (erm readme)
   charts.py       the five charts
-  note.py         LLM / template drafting, number validator, notes/ retention
-  cli.py          erm fetch | build | report | note | readme | sources
+  note.py         scaffold, optional LLM draft, number and date check (check-note)
+  cli.py          erm fetch | build | report | readme | note | check-note | sources
 tests/            pytest suite
 notebooks/        walkthrough.ipynb: each calculation step by step
 scripts/          make_sample.py
