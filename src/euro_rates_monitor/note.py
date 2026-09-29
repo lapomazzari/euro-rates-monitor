@@ -233,6 +233,11 @@ def _n(v: float | int) -> str:
     return f"{v:g}" if isinstance(v, float) else str(v)
 
 
+def _p(v: float | int) -> str:
+    """Rate levels always with two decimals (2.50%, not 2.5%); same value, so it validates."""
+    return f"{v:.2f}"
+
+
 def _mv(v: float | int | None, unit: str = "bp") -> str:
     if v is None:
         return "n/a"
@@ -251,15 +256,16 @@ def draft_template(m: dict[str, Any]) -> dict[str, Any]:
     moved = []
     for mv in m["top_moves_1w"]:
         unit = mv["latest_unit"]
-        moved.append(f"{mv['measure']}: {_n(mv['latest'])}{unit}, {_mv(mv['chg_1w_bp'])} "
+        level = _p(mv["latest"]) if unit == "%" else _n(mv["latest"])
+        moved.append(f"{mv['measure']}: {level}{unit}, {_mv(mv['chg_1w_bp'])} "
                      f"on the week ({_n(mv['size_vs_typical_week'])} times a typical weekly "
                      "move over the past year).")
-    ecb = (f"The AAA curve's 3M forward starting in 6M is {_n(m['fwd3m_in_6m_pct'])}%, in 1Y "
-           f"{_n(m['fwd3m_in_1y_pct'])}% and in 2Y {_n(m['fwd3m_in_2y_pct'])}%, against a "
-           f"deposit rate of {_n(m['ecb_dfr_pct'])}%: the 1Y forward is "
+    ecb = (f"The AAA curve's 3M forward starting in 6M is {_p(m['fwd3m_in_6m_pct'])}%, in 1Y "
+           f"{_p(m['fwd3m_in_1y_pct'])}% and in 2Y {_p(m['fwd3m_in_2y_pct'])}%, against a "
+           f"deposit rate of {_p(m['ecb_dfr_pct'])}%: the 1Y forward is "
            f"{_rel(m['fwd3m_in_1y_minus_dfr_bp'], 'bp', 'the deposit rate')} and the 2Y "
            f"forward {_rel(m['fwd3m_in_2y_minus_dfr_bp'], 'bp', 'it')}. Measured from the "
-           f"curve's own 3M rate ({_n(m['aaa_3m_pct'])}%, "
+           f"curve's own 3M rate ({_p(m['aaa_3m_pct'])}%, "
            f"{_rel(m['basis_aaa3m_minus_estr_bp'], 'bp', 'EUR STR')}), the 1Y forward is "
            f"{_rel(m['fwd3m_in_1y_minus_aaa3m_bp'], 'bp', 'today')}. Forwards include a term "
            "premium, so they are not a clean expectation of policy.")
@@ -274,8 +280,8 @@ def draft_template(m: dict[str, Any]) -> dict[str, Any]:
               f"), 1-year range {_n(m['all_minus_aaa_10y_1y_low_bp'])}-"
               f"{_n(m['all_minus_aaa_10y_1y_high_bp'])}bp at 10Y.")
     hedging = (f"A client paying floating on euro short rates pays close to EUR STR "
-               f"({_n(m['estr_pct'])}%) today; the curve's forwards imply a 3M rate of "
-               f"{_n(m['fwd3m_in_1y_pct'])}% in 1Y. The AAA 2Y yield of {_n(m['aaa_2y_pct'])}% "
+               f"({_p(m['estr_pct'])}%) today; the curve's forwards imply a 3M rate of "
+               f"{_p(m['fwd3m_in_1y_pct'])}% in 1Y. The AAA 2Y yield of {_p(m['aaa_2y_pct'])}% "
                f"sits {_n(m['aaa_2y_minus_estr_bp'])}bp above EUR STR, a rough proxy for the cost "
                "of fixing for two years. Swap rates are not in this dataset, so an actual "
                "hedge would price off the swap curve and differ from this proxy.")
