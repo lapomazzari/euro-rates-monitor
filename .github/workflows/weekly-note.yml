@@ -1,0 +1,43 @@
+# Regenerates the weekly note every Saturday in template mode (--no-llm).
+#
+# No repository secrets are needed: ECB, Fed Board and the public FRED CSV endpoint are
+# keyless, and the commit uses the GITHUB_TOKEN that Actions provides automatically.
+# The LLM drafting step is not run here because it would need ANTHROPIC_API_KEY stored
+# as a secret; notes committed by this workflow are labelled "Template note".
+name: weekly-note
+
+on:
+  schedule:
+    - cron: "0 6 * * 6"   # Saturday 06:00 UTC, after Friday's ECB curve is published
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  note:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: |
+          pip install -r requirements.lock
+          pip install --no-deps -e .
+      - name: Test
+        run: pytest -q
+      - name: Fetch, build, report, note
+        run: |
+          erm fetch
+          erm build
+          erm report
+          erm note --no-llm
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add notes figures data/processed
+          git diff --cached --quiet || git commit -m "Update weekly note"
+          git push
