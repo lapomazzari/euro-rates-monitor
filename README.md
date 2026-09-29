@@ -1,16 +1,20 @@
 # euro-rates-monitor
 
+[![tests](https://github.com/lapomazzari/euro-rates-monitor/actions/workflows/tests.yml/badge.svg)](https://github.com/lapomazzari/euro-rates-monitor/actions/workflows/tests.yml) [![weekly-note](https://github.com/lapomazzari/euro-rates-monitor/actions/workflows/weekly-note.yml/badge.svg)](https://github.com/lapomazzari/euro-rates-monitor/actions/workflows/weekly-note.yml)
+
 Tracks the euro area government curve, extracts what it prices for ECB policy, and writes a one-page weekly market note with one command.
 
+<!-- headline:start -->
 ## Headline (curve as of 28 Sep 2026)
 
-- **ECB pricing.** The AAA curve's 3-month forwards imply a short rate of **3.42% in 1 year** and **3.46% in 2 years**. The deposit rate today is **2.50%**, so that is **92bp** and **96bp** above it.
-  - Measured from the curve's own 3M rate (2.56%, which is 12bp above €STR), the 1-year forward is 86bp higher.
+- **ECB pricing.** The AAA curve's 3-month forwards imply a short rate of **3.42% in 1 year** and **3.46% in 2 years**, against a deposit rate of **2.50%** (92bp and 96bp above it).
+  - Measured from the curve's own 3M rate (2.56%, 12bp above €STR), the 1-year forward is 86bp above today.
   - Forwards include a term premium (see [Limitations](#limitations)).
 - **Curve level.** The 10Y AAA yield is **3.63%**, at the top of its one-year range.
-- **Sovereign spread.** The all-issuer vs AAA spread at 10Y is **50bp**, also at its one-year high.
+- **Sovereign spread.** The all-issuer vs AAA spread at 10Y is **50bp**, at its one-year high.
+<!-- headline:end -->
 
-Latest note: [`notes/`](notes/). The headline above is a snapshot. The note is regenerated each week.
+Latest note: [`notes/`](notes/). The headline above and the note are regenerated each week by `erm readme` and `erm note`.
 
 ![3M forward path from the AAA curve](figures/forward_path.png)
 
@@ -27,8 +31,13 @@ erm build            # analytics -> data/processed/ (metrics_latest.json feeds t
 erm report           # charts -> figures/, plus a summary on stdout
 erm note             # weekly note -> notes/<date>.md (Claude drafts the prose)
 erm note --no-llm    # same note, fixed-template wording, no API call
+erm readme           # refresh the headline at the top of this README
 pytest               # curve maths, PCA, change logic, number validator
 ```
+
+To re-run the walkthrough notebook: `pip install -e ".[notebook]"`, then open `notebooks/walkthrough.ipynb`.
+
+*Troubleshooting (macOS):* if `erm` or the notebook reports `No module named 'euro_rates_monitor'` after installing, macOS has marked the install's `.pth` file as hidden, and Python 3.13 skips hidden `.pth` files. Fix: `chflags nohidden .venv/lib/python3.*/site-packages/*.pth`.
 
 **Keys (both optional):**
 
@@ -52,7 +61,9 @@ The API call enables Anthropic's server-side fallback: if a safety classifier de
 4. **Number check.** Every number in the returned text is extracted and matched against the dictionary. A re-rounded, summed or invented number fails the check. The run retries once, then exits with the offending numbers listed. Tenor labels (10Y, 2s10s, 3-month) and dates that appear in the dictionary are exempt.
 5. **Retention.** The last 12 notes are kept in `notes/`.
 
-**Why CI uses `--no-llm`.** The GitHub Action ([`.github/workflows/weekly-note.yml`](.github/workflows/weekly-note.yml)) runs every Saturday with no repository secrets: ECB, the Fed Board and the FRED CSV endpoint are keyless. The LLM step would need `ANTHROPIC_API_KEY` stored as a secret, so the Action runs `--no-llm`, and the note it commits opens with a "Template note" label.
+**Continuous integration.** [`tests.yml`](.github/workflows/tests.yml) runs ruff and the test suite on every push. It works offline, from the committed sample and processed data.
+
+**Why the weekly job uses `--no-llm`.** The weekly GitHub Action ([`.github/workflows/weekly-note.yml`](.github/workflows/weekly-note.yml)) runs every Saturday with no repository secrets: ECB, the Fed Board and the FRED CSV endpoint are keyless. The LLM step would need `ANTHROPIC_API_KEY` stored as a secret, so the Action runs `--no-llm`, and the note it commits opens with a "Template note" label. The same run refreshes the README headline with `erm readme`.
 
 ## Method
 
@@ -148,10 +159,15 @@ src/euro_rates_monitor/
   realrates.py    realised and survey-based real rates
   changes.py      holiday-robust 1w / 1m changes
   build.py        runs everything, writes data/processed/ and metrics_latest.json
+  headline.py     README headline from the latest metrics (erm readme)
   charts.py       the five charts
   note.py         LLM / template drafting, number validator, notes/ retention
-  cli.py          erm fetch | build | report | note | sources
+  cli.py          erm fetch | build | report | note | readme | sources
 tests/            pytest suite
 notebooks/        walkthrough.ipynb: each calculation step by step
 scripts/          make_sample.py
 ```
+
+## Licence
+
+Code: [MIT](LICENSE). Data belong to their publishers and are reused under the terms listed in [SOURCES.md](SOURCES.md).

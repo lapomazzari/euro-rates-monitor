@@ -1,0 +1,24 @@
+# Lint and test on every push and pull request. Offline: the tests use the committed
+# sample and processed data, so no network access or secrets are needed.
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: |
+          pip install -r requirements.lock
+          pip install --no-deps -e .
+      - name: Lint
+        run: ruff check src tests scripts
+      - name: Test
+        run: pytest -q

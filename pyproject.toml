@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,6 +8,8 @@ version = "0.1.0"
 description = "Tracks the euro area rates market, extracts ECB pricing and writes a weekly market note."
 readme = "README.md"
 requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE"]
 # Pinned so a rerun in six months produces the same numbers from the same cache.
 dependencies = [
     "pandas==3.0.6",
@@ -19,6 +21,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest==9.1.1", "ruff==0.16.9"]
+notebook = ["nbconvert==7.17.1", "ipykernel==7.3.0"]
 
 [project.scripts]
 erm = "euro_rates_monitor.cli:main"
@@ -35,3 +38,4 @@ select = ["E", "F", "W", "I", "B", "UP", "N", "SIM"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src"]

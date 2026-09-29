@@ -1,6 +1,6 @@
-"""Command line: erm fetch | build | report | note | sources.
+"""Command line: erm fetch | build | report | note | readme | sources.
 
-Typical weekly run:  erm fetch && erm build && erm report && erm note
+Typical weekly run:  erm fetch && erm build && erm report && erm note && erm readme
 """
 
 from __future__ import annotations
@@ -51,6 +51,13 @@ def _cmd_note(args: argparse.Namespace) -> None:
     print(write_note(use_llm=not args.no_llm))
 
 
+def _cmd_readme(_: argparse.Namespace) -> None:
+    from .headline import update_readme
+
+    update_readme()
+    logging.info("updated README.md headline")
+
+
 def _cmd_sources(_: argparse.Namespace) -> None:
     from .sources import sources_markdown
 
@@ -73,6 +80,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--no-llm", action="store_true",
                    help="fixed-template wording, no API call (used in CI)")
     p.set_defaults(func=_cmd_note)
+    sub.add_parser("readme", help="rewrite the README headline from the latest metrics"
+                   ).set_defaults(func=_cmd_readme)
     sub.add_parser("sources", help="regenerate SOURCES.md from the catalogue").set_defaults(
         func=_cmd_sources)
     args = parser.parse_args(argv)
