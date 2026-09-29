@@ -8,8 +8,7 @@ import pytest
 from euro_rates_monitor.note import (
     NumberValidationError,
     draft_llm,
-    draft_template,
-    unknown_numbers,
+    unknown_tokens,
     validate,
 )
 
@@ -24,25 +23,30 @@ METRICS = {
 
 def test_numbers_from_dictionary_pass():
     text = "The 10Y rose 16bp to 3.63%; the deposit rate is 2.50% and EUR STR 2.44%."
-    assert unknown_numbers(text, METRICS) == []
+    assert unknown_tokens(text, METRICS) == []
 
 
 def test_sign_can_become_a_word():
-    assert unknown_numbers("It fell 4bp.", METRICS) == []
+    assert unknown_tokens("It fell 4bp.", METRICS) == []
 
 
 def test_invented_or_rerounded_numbers_fail():
-    assert unknown_numbers("The 10Y is 3.6%.", METRICS) == ["3.6"]
-    assert unknown_numbers("Markets price 3 hikes.", METRICS) == ["3"]
+    assert unknown_tokens("The 10Y is 3.6%.", METRICS) == ["3.6"]
+    assert unknown_tokens("Markets price 3 hikes.", METRICS) == ["3"]
     # Arithmetic on figures is not allowed either: 3.63 - 2.5 = 1.13.
-    assert unknown_numbers("A 1.13 point gap.", METRICS) == ["1.13"]
+    assert unknown_tokens("A 1.13 point gap.", METRICS) == ["1.13"]
 
 
 def test_labels_and_dictionary_dates_are_not_numbers():
     text = ("On 28 September 2026 the 2s10s and 10s30s moved; the 3-month rate in 1Y; "
             "HICP for August 2026; SPF Q3 2026.")
-    assert unknown_numbers(text, METRICS) == []
-    assert unknown_numbers("As of 2025-01-01.", METRICS) != []
+    assert unknown_tokens(text, METRICS) == []
+
+
+def test_dates_not_in_dictionary_are_reported_whole():
+    assert unknown_tokens("As of 2025-01-01.", METRICS) == ["2025-01-01"]
+    assert unknown_tokens("On 29 September 2026 it fell.", METRICS) == ["29 September 2026"]
+    assert unknown_tokens("On 28 Sep 2026 and Sept 28, 2026.", METRICS) == []
 
 
 def test_validate_raises_with_details():
@@ -88,13 +92,3 @@ def test_refusal_is_an_error():
         stop_reason="refusal", stop_details={"category": "x"}, content=[])
     with pytest.raises(RuntimeError, match="declined"):
         draft_llm(METRICS, client=client)
-
-
-def test_template_passes_validator_on_real_shaped_metrics(tmp_path):
-    from pathlib import Path
-
-    latest = Path(__file__).parents[1] / "data" / "processed" / "metrics_latest.json"
-    if not latest.exists():
-        pytest.skip("no processed metrics; run `erm build`")
-    m = json.loads(latest.read_text())
-    validate(draft_template(m), m)

@@ -1,6 +1,7 @@
-"""Command line: erm fetch | build | report | note | readme | sources.
+"""Command line: erm fetch | build | report | readme | note | check-note | sources.
 
-Typical weekly run:  erm fetch && erm build && erm report && erm note && erm readme
+Typical weekly run:  erm fetch && erm build && erm report && erm readme && erm note,
+then write the note by hand and run erm check-note on it.
 """
 
 from __future__ import annotations
@@ -8,6 +9,7 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+from pathlib import Path
 
 from . import paths
 
@@ -48,7 +50,25 @@ def _cmd_report(_: argparse.Namespace) -> None:
 def _cmd_note(args: argparse.Namespace) -> None:
     from .note import write_note
 
-    print(write_note(use_llm=not args.no_llm))
+    print(write_note(use_llm=args.llm, out_dir=args.out, force=args.force))
+
+
+def _cmd_check_note(args: argparse.Namespace) -> None:
+    from .note import check_note, note_files
+
+    files = note_files(args.paths)
+    if not files:
+        print("no notes to check")
+        return
+    failed = 0
+    for f in files:
+        problems = check_note(f)
+        print(f"{'FAIL' if problems else 'ok  '} {f}")
+        for p in problems:
+            print(f"     {p}")
+        failed += bool(problems)
+    if failed:
+        raise SystemExit(f"{failed} of {len(files)} note(s) failed the check")
 
 
 def _cmd_readme(_: argparse.Namespace) -> None:
@@ -76,10 +96,17 @@ def main(argv: list[str] | None = None) -> int:
         func=_cmd_build)
     sub.add_parser("report", help="render charts into figures/ and print a summary"
                    ).set_defaults(func=_cmd_report)
-    p = sub.add_parser("note", help="write the weekly note into notes/")
-    p.add_argument("--no-llm", action="store_true",
-                   help="fixed-template wording, no API call (used in CI)")
+    p = sub.add_parser("note", help="write a scaffold note to fill in by hand")
+    p.add_argument("--llm", action="store_true",
+                   help="optional: Claude drafts the prose (needs ANTHROPIC_API_KEY)")
+    p.add_argument("--out", type=Path, default=None,
+                   help="output directory (default notes/)")
+    p.add_argument("--force", action="store_true", help="overwrite an existing note")
     p.set_defaults(func=_cmd_note)
+    p = sub.add_parser("check-note",
+                       help="verify every number and date in notes against their figures")
+    p.add_argument("paths", nargs="+", type=Path, help="note files or directories")
+    p.set_defaults(func=_cmd_check_note)
     sub.add_parser("readme", help="rewrite the README headline from the latest metrics"
                    ).set_defaults(func=_cmd_readme)
     sub.add_parser("sources", help="regenerate SOURCES.md from the catalogue").set_defaults(
