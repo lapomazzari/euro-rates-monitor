@@ -1,5 +1,6 @@
-# Lint and test on every push and pull request. Offline: the tests use the committed
-# sample and processed data, so no network access or secrets are needed.
+# Lint, test and check every committed note on each push and pull request. Offline:
+# everything runs on the committed sample and processed data, so no network access or
+# secrets are needed. A note with a number or date not in its figures file fails here.
 name: tests
 
 on:
@@ -22,3 +23,5 @@ jobs:
         run: ruff check src tests scripts
       - name: Test
         run: pytest -q
+      - name: Check notes
+        run: erm check-note notes/

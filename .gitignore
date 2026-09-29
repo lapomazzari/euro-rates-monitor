@@ -11,3 +11,6 @@ __pycache__/
 # re-created by `erm fetch`; data/sample/ holds a small committed extract.
 data/raw/*
 !data/raw/.gitkeep
+
+# Weekly scaffold written by CI (`erm note --out scaffold`); never committed.
+scaffold/

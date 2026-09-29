@@ -1,9 +1,11 @@
-# Regenerates the weekly note every Saturday in template mode (--no-llm).
+# Weekly refresh, every Saturday. Needs no repository secrets: ECB, the Fed Board and
+# the public FRED CSV endpoint are keyless, and the commit uses the automatic
+# GITHUB_TOKEN.
 #
-# No repository secrets are needed: ECB, Fed Board and the public FRED CSV endpoint are
-# keyless, and the commit uses the GITHUB_TOKEN that Actions provides automatically.
-# The LLM drafting step is not run here because it would need ANTHROPIC_API_KEY stored
-# as a secret; notes committed by this workflow are labelled "Template note".
+# What it commits: refreshed data/processed/, figures/ and the README headline.
+# What it does not commit: any note. Notes in notes/ are written by hand. The run
+# writes this week's scaffold (figures, dates, chart, placeholders) outside notes/ and
+# attaches it to the run as a downloadable artifact, as a starting point.
 name: weekly-note
 
 on:
@@ -15,7 +17,7 @@ permissions:
   contents: write
 
 jobs:
-  note:
+  refresh:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,17 +30,25 @@ jobs:
           pip install --no-deps -e .
       - name: Test
         run: pytest -q
-      - name: Fetch, build, report, note
+      - name: Fetch, build, charts, README headline
         run: |
           erm fetch
           erm build
           erm report
-          erm note --no-llm
           erm readme
-      - name: Commit
+      - name: Check committed notes against their figures
+        run: erm check-note notes/
+      - name: Write this week's scaffold (not committed)
+        run: erm note --out scaffold
+      - uses: actions/upload-artifact@v4
+        with:
+          name: note-scaffold
+          path: scaffold/
+          retention-days: 30
+      - name: Commit data, figures and headline
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add notes figures data/processed README.md
-          git diff --cached --quiet || git commit -m "Update weekly note"
+          git add data/processed figures README.md
+          git diff --cached --quiet || git commit -m "Update weekly data and figures"
           git push
