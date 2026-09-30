@@ -378,7 +378,21 @@ def write(res: Results) -> None:
         else:
             frame.round(nd).to_csv(out / name)
     res.turning_points.to_csv(out / "ecb_turning_points.csv", index=False)
+    write_metrics(res)
+
+
+def write_metrics(res: Results) -> None:
+    """Write metrics_latest.json and the dated figures file (frozen once noted)."""
+    out = paths.PROCESSED
     text = json.dumps(res.metrics, indent=2, default=str)
     (out / "metrics_latest.json").write_text(text)
-    (out / f"metrics_{res.metrics['as_of']}.json").write_text(text)
-    log.info("wrote data/processed/ (as of %s)", res.metrics["as_of"])
+    # A note is checked against the figures file for its date. Once a note exists,
+    # that file is frozen: a later rebuild (more US days, a data revision, a new
+    # retrieval date) must not change the figures the note was written from.
+    as_of = res.metrics["as_of"]
+    dated = out / f"metrics_{as_of}.json"
+    if dated.exists() and (paths.NOTES / f"{as_of}.md").exists():
+        log.info("kept %s unchanged: notes/%s.md was written against it", dated.name, as_of)
+    else:
+        dated.write_text(text)
+    log.info("wrote data/processed/ (as of %s)", as_of)

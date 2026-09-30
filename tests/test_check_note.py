@@ -146,3 +146,26 @@ def test_write_note_to_another_directory_leaves_notes_untouched(project):
     note.write_note(out_dir=root / "scaffold")
     assert (root / "scaffold" / f"{m['as_of']}.md").exists()
     assert list((root / "notes").iterdir()) == []
+
+
+@pytest.mark.skipif(not LATEST.exists(), reason="no processed metrics; run `erm build`")
+def test_build_never_changes_the_figures_a_note_was_written_against(project):
+    from euro_rates_monitor import build
+
+    root, m = project
+    dated = root / "data/processed" / f"metrics_{m['as_of']}.json"
+    dated.write_text('{"frozen": true}')
+    (root / "notes" / f"{m['as_of']}.md").write_text("my note")
+
+    class Res:
+        metrics = {**m, "extra": 1}
+
+        def __getattr__(self, _):
+            return None
+
+    build.write_metrics(Res())
+    assert dated.read_text() == '{"frozen": true}'
+    assert '"extra": 1' in (root / "data/processed/metrics_latest.json").read_text()
+    (root / "notes" / f"{m['as_of']}.md").unlink()
+    build.write_metrics(Res())
+    assert '"extra": 1' in dated.read_text()
