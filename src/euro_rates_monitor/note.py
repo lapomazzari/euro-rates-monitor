@@ -30,7 +30,6 @@ from . import paths
 log = logging.getLogger(__name__)
 
 MODEL = os.environ.get("ERM_MODEL", "claude-opus-5-5")
-KEEP_NOTES = 12
 CHART = "forward_path.png"
 
 
@@ -471,16 +470,6 @@ def render(sections: dict[str, Any], m: dict[str, Any], chart: str) -> str:
     ])
 
 
-def prune(keep: int = KEEP_NOTES) -> None:
-    """Keep the most recent `keep` notes (and their chart images) in notes/."""
-    notes = sorted(paths.NOTES.glob("????-??-??.md"))
-    for old in notes[:-keep] if len(notes) > keep else []:
-        log.info("pruning %s (keeping the last %d notes)", old.name, keep)
-        old.unlink()
-        img = paths.NOTES / "img" / f"{old.stem}_{CHART}"
-        img.unlink(missing_ok=True)
-
-
 def write_note(use_llm: bool = False, out_dir: Path | None = None,
                force: bool = False) -> str:
     """Write the scaffold (default) or an LLM draft for the latest metrics.
@@ -500,8 +489,6 @@ def write_note(use_llm: bool = False, out_dir: Path | None = None,
     chart = f"img/{img_name}"
     text = render(draft_llm(m), m, chart) if use_llm else render_scaffold(m, chart)
     out.write_text(text)
-    if out_dir.resolve() == paths.NOTES.resolve():
-        prune()
     log.info("wrote %s (%s, %s)", out, "LLM draft" if use_llm else "scaffold",
              date.today().isoformat())
     return text

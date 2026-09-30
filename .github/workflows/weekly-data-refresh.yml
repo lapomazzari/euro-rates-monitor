@@ -6,7 +6,7 @@
 # What it does not commit: any note. Notes in notes/ are written by hand. The run
 # writes this week's scaffold (figures, dates, chart, placeholders) outside notes/ and
 # attaches it to the run as a downloadable artifact, as a starting point.
-name: weekly-note
+name: weekly-data-refresh
 
 on:
   schedule:
