@@ -1,4 +1,4 @@
-"""Command line: erm fetch | build | report | readme | note | check-note | sources.
+"""Command line: erm fetch | build | report | backtest | readme | note | check-note | sources.
 
 Typical weekly run:  erm fetch && erm build && erm report && erm readme && erm note,
 then write the note by hand and run erm check-note on it.
@@ -45,6 +45,17 @@ def _cmd_report(_: argparse.Namespace) -> None:
           f"{len(m['shape_anomalies'])}")
     print(f"  EUR-US 10Y {m['eur_minus_us_10y_par_bp']}bp  EUR/USD {m['eurusd']}  "
           f"all-AAA 10Y {m['all_minus_aaa_10y_bp']}bp")
+
+
+def _cmd_backtest(_: argparse.Namespace) -> None:
+    from . import backtest, charts
+
+    errors, summary, rd = backtest.run()
+    backtest.write(errors, summary, rd)
+    charts._style()
+    for p in (charts.backtest_errors(errors, summary, rd, paths.FIGURES),
+              charts.backtest_mean_error(summary, paths.FIGURES)):
+        logging.info("chart %s", p.relative_to(paths.ROOT))
 
 
 def _cmd_note(args: argparse.Namespace) -> None:
@@ -96,6 +107,8 @@ def main(argv: list[str] | None = None) -> int:
         func=_cmd_build)
     sub.add_parser("report", help="render charts into figures/ and print a summary"
                    ).set_defaults(func=_cmd_report)
+    sub.add_parser("backtest", help="backtest forwards vs realised 3M rate; tables + charts"
+                   ).set_defaults(func=_cmd_backtest)
     p = sub.add_parser("note", help="write a scaffold note to fill in by hand")
     p.add_argument("--llm", action="store_true",
                    help="optional: Claude drafts the prose (needs ANTHROPIC_API_KEY)")

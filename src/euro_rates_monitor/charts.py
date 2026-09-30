@@ -175,3 +175,103 @@ def make_all(r: Results, out: Path | None = None) -> list[Path]:
     _style()
     return [f(r, out) for f in (curve_snapshot, forward_path, slope_history, pca_loadings,
                                 eur_us_10y)]
+
+
+# ------------------------------------------------------------------------- backtest
+
+def _regime_spans(rd, start: pd.Timestamp, end: pd.Timestamp) -> list[tuple]:
+    from .backtest import REGIMES
+
+    return [(REGIMES[0], start, rd.lower_bound_start),
+            (REGIMES[1], rd.lower_bound_start, rd.hiking_start),
+            (REGIMES[2], rd.hiking_start, end)]
+
+
+def backtest_errors(errors: pd.DataFrame, summary: pd.DataFrame, rd, out: Path) -> Path:
+    """Daily forecast errors (forward minus realised) by horizon, regimes shaded.
+
+    Segments where a regime has too few independent windows for inference are drawn in
+    grey and labelled "descriptive only": the errors are real, no statistic is claimed.
+    """
+    from .backtest import HORIZONS_MONTHS
+
+    fig, axes = plt.subplots(2, 2, figsize=(10, 6.4), sharex=True)
+    start, end = errors["origin"].min(), errors["origin"].max()
+    spans = _regime_spans(rd, start, end)
+    for ax, h in zip(axes.flat, HORIZONS_MONTHS, strict=True):
+        s = errors[errors["horizon_m"] == h].set_index("origin")["err_fwd_bp"]
+        ax.axhline(0, color=INK2, lw=0.8)
+        cell = summary.set_index(["sample", "horizon_m"])
+        for i, (regime, a, b) in enumerate(spans):
+            if i == 1:
+                ax.axvspan(a, b, color=GRID, alpha=0.6, lw=0)
+            seg = s[(s.index >= a) & (s.index < b)]
+            withheld = bool(cell.loc[(regime, h), "withheld"])
+            ax.plot(seg.index, seg.values, lw=1.0, color=GREY if withheld else BLUE)
+            if withheld and len(seg):
+                ax.text(a + (b - a) / 2, 1.0, "descriptive only",
+                        transform=ax.get_xaxis_transform(), ha="center", va="top",
+                        fontsize=7.5, color=INK2)
+        full = cell.loc[("full sample", h)]
+        tag = " (descriptive only)" if full["withheld"] else ""
+        ax.set_title(f"3M rate {h} months ahead{tag}", fontsize=10.5, pad=6)
+        ax.text(0.01, 0.03, f"{int(full['windows'])} non-overlapping windows in full sample",
+                transform=ax.transAxes, fontsize=7.5, color=INK2)
+        ax.xaxis.set_major_locator(mdates.YearLocator(4))
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
+    for ax in axes[:, 0]:
+        ax.set_ylabel("Forward minus realised (bp)")
+    fig.suptitle("How far AAA-curve forwards missed the 3M rate", x=0.01, ha="left",
+                 fontsize=12.5, fontweight="bold", color=INK)
+    fig.text(0.01, 0.905, "Positive = the forward was above the rate that materialised. "
+             "Shaded: zero rates and asset purchases (Jul 2012 to Jul 2022).\nGrey: too few "
+             "independent windows within that regime for inference; shown as descriptive only.",
+             fontsize=8.5, color=INK2)
+    fig.text(0.01, 0.01, SOURCE_ECB, fontsize=8, color=INK2)
+    fig.tight_layout(rect=(0, 0.03, 1, 0.91))
+    path = out / "backtest_errors.png"
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+    return path
+
+
+def backtest_mean_error(summary: pd.DataFrame, out: Path) -> Path:
+    """Mean error by horizon with Newey-West 95% bands, forwards vs random walk."""
+    from .backtest import HORIZONS_MONTHS, SAMPLES
+
+    fig, axes = plt.subplots(1, 4, figsize=(12, 4.8))
+    x = np.arange(len(HORIZONS_MONTHS))
+    for ax, sample in zip(axes, SAMPLES, strict=True):
+        sub = summary[summary["sample"] == sample].set_index("horizon_m")
+        ax.axhline(0, color=INK2, lw=0.8)
+        for i, h in enumerate(HORIZONS_MONTHS):
+            r = sub.loc[h]
+            if r["withheld"]:
+                ax.text(i, 0, "n/a", ha="center", va="center", fontsize=8.5, color=INK2,
+                        bbox={"facecolor": SURFACE, "edgecolor": "none", "pad": 1})
+                continue
+            for dx, key, color, label in ((-0.12, "fwd", BLUE, "forward"),
+                                          (0.12, "rw", ORANGE, "random walk")):
+                ax.errorbar(i + dx, r[f"mean_err_{key}_bp"],
+                            yerr=[[r[f"mean_err_{key}_bp"] - r[f"ci95_lo_{key}_bp"]],
+                                  [r[f"ci95_hi_{key}_bp"] - r[f"mean_err_{key}_bp"]]],
+                            fmt="o", ms=5, color=color, capsize=3, lw=1.5,
+                            label=label if i == 0 else None)
+        ax.set_xticks(x, [f"{h}M\n{int(sub.loc[h, 'windows'])} win." for h in HORIZONS_MONTHS],
+                      fontsize=8)
+        ax.set_xlim(-0.6, len(HORIZONS_MONTHS) - 0.4)
+        ax.set_title(sample, fontsize=10, pad=6)
+        ax.grid(axis="x", visible=False)
+    axes[0].set_ylabel("Mean error, forecast minus realised (bp)")
+    axes[0].legend(loc="upper left", fontsize=8)
+    fig.suptitle("Average forecast error by horizon, with Newey-West 95% bands",
+                 x=0.01, ha="left", fontsize=12.5, fontweight="bold", color=INK)
+    fig.text(0.01, 0.905, "Month-end origins. Forward mean error = average term premium "
+             "estimate. n/a = too few independent windows for inference (descriptive only); "
+             "the raw errors are in the errors-over-time chart.", fontsize=8.5, color=INK2)
+    fig.text(0.01, 0.01, SOURCE_ECB, fontsize=8, color=INK2)
+    fig.tight_layout(rect=(0, 0.03, 1, 0.89))
+    path = out / "backtest_mean_error.png"
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+    return path
