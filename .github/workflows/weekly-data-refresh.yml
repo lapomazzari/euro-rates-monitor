@@ -1,11 +1,21 @@
-# Weekly refresh, every Saturday. Needs no repository secrets: ECB, the Fed Board and
-# the public FRED CSV endpoint are keyless, and the commit uses the automatic
-# GITHUB_TOKEN.
+# Weekly refresh, every Saturday.
 #
 # What it commits: refreshed data/processed/, figures/ and the README headline.
 # What it does not commit: any note. Notes in notes/ are written by hand. The run
-# writes this week's scaffold (figures, dates, chart, placeholders) outside notes/ and
-# attaches it to the run as a downloadable artifact, as a starting point.
+# writes this week's scaffold outside notes/ and attaches it as a downloadable artifact.
+#
+# Surviving a flaky provider (see src/euro_rates_monitor/fetch.py):
+# * The raw download cache (data/raw/, git-ignored) does not exist on a fresh runner,
+#   so it is carried between runs as an artifact: this run RESTORES the cache uploaded
+#   by the last successful run of this workflow, fetches over it, and uploads the
+#   result for next week. A series whose download fails is then served from that cache
+#   and flagged as stale in the metrics, the note and the README headline.
+#   An artifact (30-day retention) is used rather than actions/cache because caches
+#   unused for 7 days are evicted, which a weekly schedule would hit exactly.
+# * FRED_API_KEY (optional repository secret) switches FRED to its official API; an
+#   absent secret arrives as an empty string and falls back to the public CSV endpoint.
+# * Budgets (optional repository variables): ERM_FETCH_BUDGET_S caps the fetch step
+#   (default 300s); ERM_JOB_TIMEOUT_MIN caps the whole job (default 10 minutes).
 name: weekly-data-refresh
 
 on:
@@ -14,11 +24,13 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: write   # commit refreshed data, figures and headline
+  actions: read     # find and download last run's raw-cache artifact
 
 jobs:
   refresh:
     runs-on: ubuntu-latest
+    timeout-minutes: ${{ fromJSON(vars.ERM_JOB_TIMEOUT_MIN || '10') }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -30,9 +42,36 @@ jobs:
           pip install --no-deps -e .
       - name: Test
         run: pytest -q
-      - name: Fetch, build, charts, README headline
+
+      - name: Restore raw-data cache from the last successful run
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          erm fetch
+          run_id=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow weekly-data-refresh.yml \
+                     --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+          if [ -z "$run_id" ]; then
+            echo "No previous successful run: starting without a cache."
+          elif gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name raw-cache --dir data/raw; then
+            echo "Restored raw cache from run $run_id."
+          else
+            echo "Run $run_id has no raw-cache artifact (expired?): starting without a cache."
+          fi
+
+      - name: Fetch
+        env:
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+          ERM_FETCH_BUDGET_S: ${{ vars.ERM_FETCH_BUDGET_S || '300' }}
+        run: erm fetch
+
+      - name: Save raw-data cache for next week
+        uses: actions/upload-artifact@v4
+        with:
+          name: raw-cache
+          path: data/raw/
+          retention-days: 30
+
+      - name: Build, charts, README headline
+        run: |
           erm build
           erm report
           erm readme
@@ -45,6 +84,7 @@ jobs:
           name: note-scaffold
           path: scaffold/
           retention-days: 30
+
       - name: Commit data, figures and headline
         run: |
           git config user.name "github-actions[bot]"
@@ -52,3 +92,7 @@ jobs:
           git add data/processed figures README.md
           git diff --cached --quiet || git commit -m "Update weekly data and figures"
           git push
+
+      - name: Fetch summary
+        if: always()
+        run: erm fetch-summary >> "$GITHUB_STEP_SUMMARY" || echo "Fetch summary unavailable." >> "$GITHUB_STEP_SUMMARY"
