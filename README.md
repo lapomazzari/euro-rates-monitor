@@ -13,6 +13,7 @@ Tracks the euro area government curve, extracts what it prices for ECB policy, a
   - Forwards include a term premium (see [Limitations](#limitations)).
 - **Curve level.** The 10Y AAA yield is **3.63%**, at the top of its one-year range.
 - **Sovereign spread.** The all-issuer vs AAA spread at 10Y is **50bp**, at its one-year high.
+- **Data retrieved.** ECB Data Portal 2026-09-29; FRED 2026-09-29; Fed Board 2026-09-29. Stale = retrieved more than 3 days before this build (run 2026-09-30).
 <!-- headline:end -->
 
 Notes: [`notes/`](notes/). The headline above is regenerated each week by `erm readme`.
@@ -28,6 +29,7 @@ python3.12 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.lock && pip install --no-deps -e .
 
 erm fetch            # download every series into data/raw/<source>/<name>_<date>.csv
+erm fetch-summary    # the last fetch as a table: fresh, served from cache, or missing
 erm build            # analytics -> data/processed/ (metrics_latest.json feeds the note)
 erm report           # charts -> figures/, plus a summary on stdout
 erm note             # scaffold for this week's note -> notes/<date>.md, to fill in by hand
@@ -42,13 +44,14 @@ To re-run the walkthrough notebook: `pip install -e ".[notebook]"`, then open `n
 
 *Troubleshooting (macOS):* if `erm` or the notebook reports `No module named 'euro_rates_monitor'` after installing, macOS has marked the install's `.pth` file as hidden, and Python 3.13 skips hidden `.pth` files. Fix: `chflags nohidden .venv/lib/python3.*/site-packages/*.pth`.
 
-**Keys (both optional):**
+**Keys and settings (all optional):**
 
 | Variable | What it does | Without it |
 |---|---|---|
 | `FRED_API_KEY` | `fetch` uses the official FRED API ([free key](https://fred.stlouisfed.org/docs/api/api_key.html)). | `fetch` falls back to FRED's public CSV download (`fredgraph.csv`). Same data, same cache format. |
 | `ANTHROPIC_API_KEY` | `erm note --llm` has Claude draft the prose. | Everything else works; `erm note` writes the scaffold. |
 | `ERM_MODEL` | Changes the model. | Default: `claude-opus-5-5`. |
+| `ERM_FETCH_BUDGET_S` | Caps the whole fetch step, in seconds. | Default: 300. |
 
 The optional LLM call enables Anthropic's server-side fallback: if a safety classifier declines the request, it is re-run on a fallback model instead of failing.
 
@@ -58,7 +61,11 @@ The committed notes in `notes/` are written by hand from the figures `erm build`
 
 **Continuous integration.** [`tests.yml`](.github/workflows/tests.yml) runs ruff, the test suite and `erm check-note notes/` on every push. It works offline, from the committed sample and processed data.
 
-**Weekly refresh.** [`weekly-data-refresh.yml`](.github/workflows/weekly-data-refresh.yml) runs every Saturday with no repository secrets. It refreshes the data, figures and README headline and commits those; it writes that week's scaffold as a downloadable run artifact and never commits a note.
+**Weekly refresh.** [`weekly-data-refresh.yml`](.github/workflows/weekly-data-refresh.yml) runs every Saturday. It refreshes the data, figures and README headline and commits those; it writes that week's scaffold as a downloadable run artifact and never commits a note.
+- *Where the cache comes from:* the raw download cache is git-ignored, so a fresh runner would have nothing to fall back on. The workflow therefore **restores `data/raw/` from the `raw-cache` artifact of the last successful run** before fetching, and uploads the updated cache for the following week. An artifact (30-day retention) is used rather than `actions/cache`, whose 7-day eviction a weekly schedule would hit exactly.
+- *FRED:* an optional `FRED_API_KEY` repository secret switches FRED from the public CSV download to its official API.
+- *Limits:* two optional repository variables, `ERM_FETCH_BUDGET_S` (default 300 seconds) and `ERM_JOB_TIMEOUT_MIN` (default 10 minutes), cap the fetch step and the whole job.
+- *Summary:* every run, including failed ones, writes the fetch report to the run's summary page as a table.
 
 ## What the forwards have been worth
 
@@ -183,6 +190,7 @@ Current values are in `data/processed/metrics_latest.json`.
 
 - **Sources:** every series, with identifier, source, URL and licence, is listed in [SOURCES.md](SOURCES.md), which is generated from [`sources.py`](src/euro_rates_monitor/sources.py).
 - **Licences:** ECB statistics may be reused with the source quoted; US series are public domain.
+- **When a download fails:** it is retried only if it can recover (timeouts, connection errors, 429, 5xx), then served from the latest cached copy and flagged stale in the metrics, the note and the README headline if retrieved more than 3 days before the build; a section with no data at all is marked unavailable, never filled with old numbers. Only the four series the euro analysis needs (AAA curve, its parameters, deposit rate, €STR) can make `erm fetch` fail.
 - **What is committed:** the raw cache (about 36MB) is not committed. `data/sample/` holds the last 60 observations of each raw file, unmodified. `data/processed/` holds the derived tables, except the daily backtest errors, which `erm backtest` regenerates.
 - **Left out:** swap rates, Bund futures and euro area inflation swaps, because no stable free source with clear terms exists. They are not approximated.
 
@@ -196,7 +204,7 @@ Current values are in `data/processed/metrics_latest.json`.
 ```
 src/euro_rates_monitor/
   sources.py      series catalogue (ids, URLs, licences) -> SOURCES.md
-  fetch.py        downloads + dated cache + manifest
+  fetch.py        downloads, retries, cache fallback, fetch report
   load.py         parse cached files
   curve.py        Svensson evaluation, level/slope/curvature, ranges
   forwards.py     forward rates, ECB path, term-premium scenarios
@@ -204,12 +212,14 @@ src/euro_rates_monitor/
   crossmarket.py  EUR vs US, EUR/USD vs differentials, AAA vs all-issuer
   realrates.py    realised and survey-based real rates
   changes.py      holiday-robust 1w / 1m changes
+  freshness.py    retrieval age (stale flag) vs last observation, per series
   backtest.py     forwards vs realised 3M rate, Newey-West, regimes
   build.py        runs everything, writes data/processed/ and metrics_latest.json
   headline.py     README headline from the latest metrics (erm readme)
   charts.py       the five charts
   note.py         scaffold, optional LLM draft, number and date check (check-note)
-  cli.py          erm fetch | build | report | backtest | readme | note | check-note | sources
+  cli.py          erm fetch | fetch-summary | build | report | backtest | readme | note |
+                  check-note | sources
 tests/            pytest suite
 notebooks/        walkthrough.ipynb: each calculation step by step
 scripts/          make_sample.py
