@@ -44,6 +44,9 @@ class Series:
     what:      one-line description.
     unit:      unit of the values as published.
     licence:   reuse terms.
+    section:   the analysis it feeds (see build.SECTION_INPUTS).
+    required:  if True, the euro analysis and the headline cannot be built without it,
+               so `erm fetch` fails when it has neither a fresh download nor a cache.
     """
 
     name: str
@@ -52,6 +55,8 @@ class Series:
     what: str
     unit: str
     licence: str
+    section: str = "core"
+    required: bool = False
 
     @property
     def url(self) -> str:
@@ -72,58 +77,70 @@ def _yc(curve: str, items: list[str]) -> str:
 CATALOGUE: list[Series] = [
     Series("ecb_spot_aaa", "ECB", _yc("G_N_A", list(SPOT_TENORS)),
            "Euro area AAA government zero-coupon spot rates, 3M-30Y", "% p.a., cont. comp.",
-           LICENCE_ECB),
+           LICENCE_ECB, "core", required=True),
     Series("ecb_spot_all", "ECB", _yc("G_N_C", list(SPOT_TENORS)),
            "Euro area all-issuer government zero-coupon spot rates, 3M-30Y",
-           "% p.a., cont. comp.", LICENCE_ECB),
+           "% p.a., cont. comp.", LICENCE_ECB, "credit"),
     Series("ecb_params_aaa", "ECB", _yc("G_N_A", SVENSSON_PARAMS),
-           "Svensson parameters of the AAA curve", "betas in %, taus in years", LICENCE_ECB),
+           "Svensson parameters of the AAA curve", "betas in %, taus in years", LICENCE_ECB,
+           "core", required=True),
     Series("ecb_par_aaa", "ECB", _yc("G_N_A", list(PAR_TENORS)),
-           "Euro area AAA government par yields, 2/5/10/30Y", "% p.a.", LICENCE_ECB),
+           "Euro area AAA government par yields, 2/5/10/30Y", "% p.a.", LICENCE_ECB,
+           "cross_market"),
     Series("ecb_estr", "ECB", "EST/B.EU000A2X2A25.WT",
            "Euro short-term rate (EUR STR), volume-weighted trimmed mean", "% p.a.",
-           LICENCE_ECB),
+           LICENCE_ECB, "core", required=True),
     Series("ecb_dfr", "ECB", "FM/D.U2.EUR.4F.KR.DFR.LEV",
-           "ECB deposit facility rate", "% p.a.", LICENCE_ECB),
-    Series("ecb_mro", "ECB", "FM/D.U2.EUR.4F.KR.MRR_FR.LEV",
-           "ECB main refinancing operations rate (fixed rate)", "% p.a.", LICENCE_ECB),
+           "ECB deposit facility rate", "% p.a.", LICENCE_ECB, "core", required=True),
     # The older ICP/M.U2.N.000000.4.ANR series stops at 2025-12 after Eurostat's
     # move to the ECOICOP 2 classification; the HICP dataflow carries the current data.
     Series("ecb_hicp", "ECB", "HICP/M.U2.N.000000.4D0.ANR",
            "Euro area HICP, overall index, annual rate of change", "% y/y",
-           LICENCE_EUROSTAT),
+           LICENCE_EUROSTAT, "real_rates_ea"),
     Series("ecb_spf_lt", "ECB", "SPF/Q.U2.HICP.POINT.LT.Q.AVG",
            "ECB Survey of Professional Forecasters, longer-term HICP expectation (mean)",
-           "% y/y", LICENCE_ECB),
+           "% y/y", LICENCE_ECB, "real_rates_ea"),
     Series("ecb_spf_1y", "ECB", "SPF/M.U2.HICP.POINT.P12M.Q.AVG",
            "ECB SPF, HICP expectation one year ahead (mean; date = target month)",
-           "% y/y", LICENCE_ECB),
+           "% y/y", LICENCE_ECB, "real_rates_ea"),
     Series("ecb_eurusd", "ECB", "EXR/D.USD.EUR.SP00.A",
            "ECB euro reference exchange rate, US dollars per euro", "USD per EUR",
-           LICENCE_ECB),
+           LICENCE_ECB, "fx"),
     *[
-        Series(f"fred_{sid.lower()}", "FRED", sid, what, unit, LICENCE_US_PUBLIC)
-        for sid, what, unit in [
-            ("DGS3MO", "US Treasury 3-month constant maturity yield", "% p.a., bond-equiv."),
-            ("DGS1", "US Treasury 1-year constant maturity yield", "% p.a., bond-equiv."),
-            ("DGS2", "US Treasury 2-year constant maturity yield", "% p.a., bond-equiv."),
-            ("DGS5", "US Treasury 5-year constant maturity yield", "% p.a., bond-equiv."),
-            ("DGS10", "US Treasury 10-year constant maturity yield", "% p.a., bond-equiv."),
-            ("DGS30", "US Treasury 30-year constant maturity yield", "% p.a., bond-equiv."),
-            ("DFEDTARU", "Fed funds target range, upper limit", "% p.a."),
-            ("DFEDTARL", "Fed funds target range, lower limit", "% p.a."),
-            ("CPIAUCSL", "US CPI, all urban consumers, SA index", "index 1982-84=100"),
-            ("T5YIE", "US 5-year breakeven inflation (nominal minus TIPS)", "% p.a."),
-            ("T10YIE", "US 10-year breakeven inflation (nominal minus TIPS)", "% p.a."),
-            ("DFII10", "US 10-year TIPS constant maturity real yield", "% p.a."),
+        Series(f"fred_{sid.lower()}", "FRED", sid, what, unit, LICENCE_US_PUBLIC, section)
+        for sid, what, unit, section in [
+            ("DGS2", "US Treasury 2-year constant maturity yield", "% p.a., bond-equiv.",
+             "cross_market"),
+            ("DGS5", "US Treasury 5-year constant maturity yield", "% p.a., bond-equiv.",
+             "cross_market"),
+            ("DGS10", "US Treasury 10-year constant maturity yield", "% p.a., bond-equiv.",
+             "cross_market"),
+            ("DGS30", "US Treasury 30-year constant maturity yield", "% p.a., bond-equiv.",
+             "cross_market"),
+            ("DFEDTARU", "Fed funds target range, upper limit", "% p.a.", "cross_market"),
+            ("DFEDTARL", "Fed funds target range, lower limit", "% p.a.", "cross_market"),
+            ("CPIAUCSL", "US CPI, all urban consumers, SA index", "index 1982-84=100",
+             "real_rates_us"),
+            ("T10YIE", "US 10-year breakeven inflation (nominal minus TIPS)", "% p.a.",
+             "real_rates_us"),
+            ("DFII10", "US 10-year TIPS constant maturity real yield", "% p.a.",
+             "real_rates_us"),
         ]
     ],
     Series("fed_gsw", "FEDBOARD", GSW_URL,
            "US Treasury zero-coupon curve, Gurkaynak-Sack-Wright (2006) Svensson fit",
-           "% p.a., cont. comp.", LICENCE_FED_BOARD),
+           "% p.a., cont. comp.", LICENCE_FED_BOARD, "cross_market"),
 ]
 
 BY_NAME: dict[str, Series] = {s.name: s for s in CATALOGUE}
+
+SECTION_LABELS = {
+    "credit": "sovereign credit (all-issuer curve)",
+    "cross_market": "cross-market (US data)",
+    "fx": "FX (EUR/USD vs rate differential)",
+    "real_rates_ea": "euro area real rates",
+    "real_rates_us": "US real rates",
+}
 
 
 def sources_markdown() -> str:
@@ -134,14 +151,14 @@ def sources_markdown() -> str:
         "Generated from `src/euro_rates_monitor/sources.py` by `erm sources`. Every download",
         "is cached under `data/raw/<source>/<name>_<retrieval-date>.csv` and parsed from there.",
         "",
-        "| Local name | Source | Identifier | Description | Unit | Licence |",
-        "|---|---|---|---|---|---|",
+        "| Local name | Source | Identifier | Description | Unit | Feeds | Licence |",
+        "|---|---|---|---|---|---|---|",
     ]
     for s in CATALOGUE:
         ident = s.key if s.source != "FEDBOARD" else "feds200628.csv"
         lines.append(
             f"| `{s.name}` | {s.source} | [`{ident}`]({s.url}) | {s.what} | {s.unit} "
-            f"| {s.licence} |"
+            f"| {s.section}{' (required)' if s.required else ''} | {s.licence} |"
         )
     lines += [
         "",
