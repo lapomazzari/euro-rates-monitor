@@ -98,6 +98,8 @@ The committed notes in `notes/` are written by hand from the figures `erm build`
 - Any statement at 24 months, where the errors are large and dominated by two episodes: forwards about 460bp too high in mid-2008 and about 450bp too low in late 2021 (see the chart).
 - Eight cells are tested. With that many tests, one p-value near 0.06 (the hiking-period 3M cell) is what chance alone would often produce.
 
+**Why forwards still matter.** A forward is not a forecast. It is the rate at which the market will trade with you today, so it is what a hedge costs, whatever its record as a predictor. A client fixing floating-rate exposure locks in the forward path, strictly the swap curve's rather than these government-curve forwards, and the backtest shows how far that price has historically been from the rate that followed.
+
 **Method.** At each date, the 3M forward starting in h months (from `forwards.py`, the same code the live tool uses) is compared with the published AAA 3M rate h calendar months later. The random walk predicts today's 3M rate and is scored on the same dates.
 - *Standard errors:* errors from overlapping h-month windows are autocorrelated, so they use Newey-West with lag h, with a moving-block bootstrap as a cross-check (both in `data/processed/backtest_summary.csv`).
 - *Withheld cells:* no statistic is reported below 12 non-overlapping windows. That threshold is a judgement call, and the window count is printed in every cell.
