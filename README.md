@@ -13,7 +13,7 @@ Tracks the euro area government curve, extracts what it prices for ECB policy, a
   - Forwards include a term premium (see [Limitations](#limitations)).
 - **Curve level.** The 10Y AAA yield is **3.63%**, at the top of its one-year range.
 - **Sovereign spread.** The all-issuer vs AAA spread at 10Y is **50bp**, at its one-year high.
-- **Data retrieved.** ECB Data Portal 2026-09-29; FRED 2026-09-29; Fed Board 2026-09-29. Stale = retrieved more than 3 days before this build (run 2026-09-30).
+- **Data retrieved.** ECB Data Portal 2026-09-30; FRED 2026-09-30; Fed Board 2026-09-30. Stale = retrieved more than 3 days before this build (run 2026-09-30).
 <!-- headline:end -->
 
 Notes: [`notes/`](notes/). The headline above is regenerated each week by `erm readme`.
