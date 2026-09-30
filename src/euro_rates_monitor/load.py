@@ -29,6 +29,12 @@ def latest_file(name: str) -> Path:
     return files[-1]
 
 
+def has(name: str) -> bool:
+    """True if at least one cached file exists for the series."""
+    series = BY_NAME[name]
+    return any((paths.RAW / series.source.lower()).glob(f"{name}_*.csv"))
+
+
 def retrieval_date(name: str) -> str:
     """Retrieval date encoded in the latest cache file name (YYYY-MM-DD)."""
     return latest_file(name).stem.rsplit("_", 1)[1]

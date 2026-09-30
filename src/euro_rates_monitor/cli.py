@@ -1,4 +1,5 @@
-"""Command line: erm fetch | build | report | backtest | readme | note | check-note | sources.
+"""Command line: erm fetch | fetch-summary | build | report | backtest | readme | note |
+check-note | sources.
 
 Typical weekly run:  erm fetch && erm build && erm report && erm readme && erm note,
 then write the note by hand and run erm check-note on it.
@@ -15,9 +16,26 @@ from . import paths
 
 
 def _cmd_fetch(args: argparse.Namespace) -> None:
-    from .fetch import fetch_all
+    from .fetch import fetch_all, missing_required
 
-    fetch_all(force=args.force)
+    missing = missing_required(fetch_all(force=args.force))
+    if missing:
+        raise SystemExit(f"required series unavailable (no download, no cache): "
+                         f"{', '.join(missing)}")
+
+
+def _cmd_fetch_summary(_: argparse.Namespace) -> None:
+    """Print the last fetch report as markdown (the Actions step appends it to the
+    run summary page)."""
+    import json
+
+    from .fetch import REPORT, summary_markdown
+
+    report = paths.RAW / REPORT
+    if not report.exists():
+        print("## Data fetch\n\nNo fetch report: `erm fetch` did not run or crashed early.")
+        return
+    print(summary_markdown(json.loads(report.read_text())))
 
 
 def _cmd_build(_: argparse.Namespace) -> None:
@@ -43,8 +61,10 @@ def _cmd_report(_: argparse.Namespace) -> None:
           f"{m['fwd3m_in_1y_pct']}% ({m['fwd3m_in_1y_minus_dfr_bp']:+}bp vs DFR)")
     print(f"  PCA top-3 explained {m['pca_top3_explained_pct']}%  anomalies: "
           f"{len(m['shape_anomalies'])}")
-    print(f"  EUR-US 10Y {m['eur_minus_us_10y_par_bp']}bp  EUR/USD {m['eurusd']}  "
-          f"all-AAA 10Y {m['all_minus_aaa_10y_bp']}bp")
+    print(f"  EUR-US 10Y {m.get('eur_minus_us_10y_par_bp', 'n/a')}bp  "
+          f"EUR/USD {m.get('eurusd', 'n/a')}  all-AAA 10Y {m.get('all_minus_aaa_10y_bp', 'n/a')}bp")
+    if m["sections_unavailable"]:
+        print(f"  unavailable: {', '.join(m['sections_unavailable'])}")
 
 
 def _cmd_backtest(_: argparse.Namespace) -> None:
@@ -103,6 +123,8 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("fetch", help="download all series into data/raw/ (cached per day)")
     p.add_argument("--force", action="store_true", help="re-download even if cached today")
     p.set_defaults(func=_cmd_fetch)
+    sub.add_parser("fetch-summary", help="print the last fetch report as a markdown table"
+                   ).set_defaults(func=_cmd_fetch_summary)
     sub.add_parser("build", help="compute analytics into data/processed/").set_defaults(
         func=_cmd_build)
     sub.add_parser("report", help="render charts into figures/ and print a summary"
