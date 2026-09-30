@@ -26,6 +26,8 @@ from pathlib import Path
 from typing import Any
 
 from . import paths
+from .freshness import data_line
+from .sources import SECTION_LABELS
 
 log = logging.getLogger(__name__)
 
@@ -115,10 +117,11 @@ def unknown_tokens(text: str, metrics: dict[str, Any]) -> list[str]:
     Dates must match a date in the dictionary (in any common rendering). Numbers must
     match a dictionary value exactly, up to sign: '2.50' matches 2.5, but '3.6' does
     not match 3.63, so re-rounding fails, and so does arithmetic on figures. Tenor
-    labels (10Y, 2s10s, 3-month), link targets and HTML comments are not claims and
-    are ignored.
+    labels (10Y, 2s10s, 3-month), link targets, inline code (file names, commands) and
+    HTML comments are not claims and are ignored.
     """
     text = re.sub(r"<!--.*?-->", " ", text, flags=re.S)
+    text = re.sub(r"`[^`\n]*`", " ", text)                  # inline code: paths, commands
     text = re.sub(r"\]\([^)]*\)", "] ", text)          # markdown link / image targets
     bad: list[str] = []
     dates_ok = allowed_dates(metrics)
@@ -317,16 +320,33 @@ def _title(m: dict[str, Any]) -> str:
     return f"# Euro rates weekly: {d.day} {d:%B %Y}"
 
 
+def _unavailable(m: dict[str, Any], *sections: str) -> str | None:
+    """'Unavailable this build: ...' if any of the sections is missing, else None."""
+    gone = [SECTION_LABELS[s] for s in sections if s in m.get("sections_unavailable", [])]
+    return f"Unavailable this build: {', '.join(gone)}." if gone else None
+
+
 def _footer(m: dict[str, Any]) -> list[str]:
-    return [
+    """Last-observation dates per source, the retrieval line, and what is unavailable."""
+    obs = [f"ECB curve and EUR STR as of {m['as_of']}"]
+    if "eur_us_spread_date" in m:
+        obs += [f"US Treasury yields to {m['eur_us_spread_date']}",
+                f"US zero curve {m['us_zero_curve_date']}"]
+    if "hicp_month" in m:
+        obs.append(f"HICP {m['hicp_month']}")
+    lines = [
         "---",
-        f"*Data: ECB curve and EUR STR as of {m['as_of']}; US Treasury yields to "
-        f"{m['eur_us_spread_date']}; US zero curve {m['us_zero_curve_date']}; HICP "
-        f"{m['hicp_month']}. Forwards are from the AAA government curve, include a term "
-        "premium and are not OIS-implied. Source: ECB statistics; Eurostat; FRED "
-        "(St. Louis Fed); Federal Reserve Board; own calculations. Not investment advice.*",
-        "",
+        f"*Last observations: {'; '.join(obs)}. Forwards are from the AAA government "
+        "curve, include a term premium and are not OIS-implied. Source: ECB statistics; "
+        "Eurostat; FRED (St. Louis Fed); Federal Reserve Board; own calculations. Not "
+        "investment advice.*",
     ]
+    if "freshness" in m:
+        lines += ["", f"*Data retrieved: {data_line(m['freshness'])}*"]
+    gone = _unavailable(m, *SECTION_LABELS)
+    if gone:
+        lines += ["", f"*{gone}*"]
+    return [*lines, ""]
 
 
 def _figures(m: dict[str, Any]) -> list[str]:
@@ -348,12 +368,22 @@ def _figures(m: dict[str, Any]) -> list[str]:
                                ("2s5s10s", "fly_2s5s10s"))]
     cross = [f"| EUR-US {t}Y par spread | {_n(m[f'eur_minus_us_{t}y_par_bp'])}bp | "
              f"{_s(m[f'eur_minus_us_{t}y_par_chg_1w_bp'])} | "
-             f"{_s(m[f'eur_minus_us_{t}y_par_chg_1m_bp'])} | |" for t in (2, 10)]
+             f"{_s(m[f'eur_minus_us_{t}y_par_chg_1m_bp'])} | |"
+             for t in (2, 10) if f"eur_minus_us_{t}y_par_bp" in m]
     cross += [f"| All-issuer minus AAA {t}Y | {_n(m[f'all_minus_aaa_{t}y_bp'])}bp | "
               f"{_s(m[f'all_minus_aaa_{t}y_chg_1w_bp'])} | "
               f"{_s(m[f'all_minus_aaa_{t}y_chg_1m_bp'])} | "
               f"{_n(m[f'all_minus_aaa_{t}y_1y_low_bp'])} to "
-              f"{_n(m[f'all_minus_aaa_{t}y_1y_high_bp'])}bp |" for t in (5, 10)]
+              f"{_n(m[f'all_minus_aaa_{t}y_1y_high_bp'])}bp |"
+              for t in (5, 10) if f"all_minus_aaa_{t}y_bp" in m]
+    fx = ([f"EUR/USD {_n(m['eurusd'])} on {m['eurusd_date']} "
+           f"({_s(m['eurusd_chg_1w_pct'], '%')} 1W, {_s(m['eurusd_chg_1m_pct'], '%')} 1M). "
+           f"Correlation of daily changes with the EUR-US 2Y differential: "
+           f"{_n(m['eurusd_corr_2y_diff_3m'])} over 3M, {_n(m['eurusd_corr_2y_diff_1y'])} "
+           f"over 1Y. On {m['eurusd_fit_date']}: {_s(m['eurusd_minus_fit_pct'], '%')} vs its "
+           f"1Y fit on that differential (R-squared {_n(m['eurusd_fit_r2'])}).", ""]
+          if "eurusd" in m else [])
+    gone = _unavailable(m, "cross_market", "fx", "credit")
     head = "| | Latest | 1W change | 1M change | 1Y range |\n|---|---|---|---|---|"
     return [
         "## Figures (computed by `erm build`)",
@@ -388,16 +418,9 @@ def _figures(m: dict[str, Any]) -> list[str]:
         "",
         "**Cross-asset**",
         "",
-        head,
-        *cross,
-        "",
-        f"EUR/USD {_n(m['eurusd'])} on {m['eurusd_date']} "
-        f"({_s(m['eurusd_chg_1w_pct'], '%')} 1W, {_s(m['eurusd_chg_1m_pct'], '%')} 1M). "
-        f"Correlation of daily changes with the EUR-US 2Y differential: "
-        f"{_n(m['eurusd_corr_2y_diff_3m'])} over 3M, {_n(m['eurusd_corr_2y_diff_1y'])} over "
-        f"1Y. On {m['eurusd_fit_date']}: {_s(m['eurusd_minus_fit_pct'], '%')} vs its 1Y fit "
-        f"on that differential (R-squared {_n(m['eurusd_fit_r2'])}).",
-        "",
+        *([head, *cross, ""] if cross else []),
+        *fx,
+        *([gone, ""] if gone else []),
         f"**Hedging inputs**: EUR STR {_p(m['estr_pct'])}%, deposit rate "
         f"{_p(m['ecb_dfr_pct'])}%, 3M forward in 1Y {_p(m['fwd3m_in_1y_pct'])}%, AAA 2Y "
         f"{_p(m['aaa_2y_pct'])}% ({_s(m['aaa_2y_minus_estr_bp'])} vs EUR STR). Swap rates are "
@@ -429,8 +452,10 @@ def render_scaffold(m: dict[str, Any], chart: str) -> str:
         f"![3M forward path from the AAA curve]({chart})",
         "",
         "## Cross-asset",
-        f"- **FX:** {PLACEHOLDER} EUR/USD against the EUR-US 2Y differential.]",
-        f"- **Sovereign credit:** {PLACEHOLDER} all-issuer minus AAA spread at 5Y and 10Y.]",
+        "- **FX:** " + (_unavailable(m, "fx") or
+                        f"{PLACEHOLDER} EUR/USD against the EUR-US 2Y differential.]"),
+        "- **Sovereign credit:** " + (_unavailable(m, "credit") or
+                                      f"{PLACEHOLDER} all-issuer minus AAA spread at 5Y and 10Y.]"),
         "",
         "## For a client hedging floating-rate exposure",
         f"{PLACEHOLDER} hedger paragraph. What the pricing means mechanically for a client "

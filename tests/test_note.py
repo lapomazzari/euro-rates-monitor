@@ -92,3 +92,9 @@ def test_refusal_is_an_error():
         stop_reason="refusal", stop_details={"category": "x"}, content=[])
     with pytest.raises(RuntimeError, match="declined"):
         draft_llm(METRICS, client=client)
+
+
+def test_inline_code_is_not_a_claim():
+    # A file name's date fragments must not be read as numbers.
+    assert unknown_tokens("See `data/processed/metrics_2026-09-27.json`.", METRICS) == []
+    assert unknown_tokens("See metrics for 27 bp.", METRICS) == ["27"]

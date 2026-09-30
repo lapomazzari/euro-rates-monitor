@@ -14,6 +14,7 @@ from datetime import datetime
 from typing import Any
 
 from . import paths
+from .freshness import data_line
 from .note import _n, _p, _rel, validate
 
 START, END = "<!-- headline:start -->", "<!-- headline:end -->"
@@ -68,14 +69,6 @@ def headline_markdown(m: dict[str, Any], b: dict[str, Any] | None = None) -> str
     b: the backtest headline dictionary, if available; its verdict comes first.
     """
     as_of = datetime.strptime(m["as_of"], "%Y-%m-%d")
-    spread = m["all_minus_aaa_10y_bp"]
-    if spread >= m["all_minus_aaa_10y_1y_high_bp"]:
-        spread_pos = "at its one-year high"
-    elif spread <= m["all_minus_aaa_10y_1y_low_bp"]:
-        spread_pos = "at its one-year low"
-    else:
-        spread_pos = (f"within its one-year range of {_n(m['all_minus_aaa_10y_1y_low_bp'])}"
-                      f"-{_n(m['all_minus_aaa_10y_1y_high_bp'])}bp")
     bullets = [backtest_bullet(b)] if b else []
     bullets += [
         (f"- **ECB pricing.** The AAA curve's 3-month forwards imply a short rate of "
@@ -89,10 +82,28 @@ def headline_markdown(m: dict[str, Any], b: dict[str, Any] | None = None) -> str
          "  - Forwards include a term premium (see [Limitations](#limitations))."),
         (f"- **Curve level.** The 10Y AAA yield is **{_p(m['aaa_10y_pct'])}%**, "
          f"{_range_phrase(m['aaa_10y_pct_of_1y_range'])}."),
-        (f"- **Sovereign spread.** The all-issuer vs AAA spread at 10Y is "
-         f"**{_n(spread)}bp**, {spread_pos}."),
     ]
+    if "all_minus_aaa_10y_bp" in m:
+        bullets.append(_spread_bullet(m))
+    if "freshness" in m:
+        bullets.append(f"- **Data retrieved.** {data_line(m['freshness'])}")
+        gone = m.get("sections_unavailable", [])
+        if gone:
+            bullets[-1] += f" Unavailable this build: {', '.join(gone)}."
     return "\n".join([f"## Headline (curve as of {as_of.day} {as_of:%b %Y})", "", *bullets])
+
+
+def _spread_bullet(m: dict[str, Any]) -> str:
+    spread = m["all_minus_aaa_10y_bp"]
+    if spread >= m["all_minus_aaa_10y_1y_high_bp"]:
+        pos = "at its one-year high"
+    elif spread <= m["all_minus_aaa_10y_1y_low_bp"]:
+        pos = "at its one-year low"
+    else:
+        pos = (f"within its one-year range of {_n(m['all_minus_aaa_10y_1y_low_bp'])}"
+               f"-{_n(m['all_minus_aaa_10y_1y_high_bp'])}bp")
+    return (f"- **Sovereign spread.** The all-issuer vs AAA spread at 10Y is "
+            f"**{_n(spread)}bp**, {pos}.")
 
 
 def update_readme() -> None:

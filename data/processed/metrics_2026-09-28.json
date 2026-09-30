@@ -139,5 +139,215 @@
       "latest_unit": "%",
       "size_vs_typical_week": 2.2
     }
-  ]
+  ],
+  "sections_unavailable": [],
+  "freshness": {
+    "run_date": "2026-09-30",
+    "stale_after_days": 3,
+    "series": {
+      "ecb_spot_aaa": {
+        "source": "ECB",
+        "status": "ok",
+        "retrieved": "2026-09-29",
+        "retrieval_age_days": 1,
+        "stale": false,
+        "last_observation": "2026-09-28",
+        "required": true
+      },
+      "ecb_spot_all": {
+        "source": "ECB",
+        "status": "ok",
+        "retrieved": "2026-09-29",
+        "retrieval_age_days": 1,
+        "stale": false,
+        "last_observation": "2026-09-28",
+        "required": false
+      },
+      "ecb_params_aaa": {
+        "source": "ECB",
+        "status": "ok",
+        "retrieved": "2026-09-29",
+        "retrieval_age_days": 1,
+        "stale": false,
+        "last_observation": "2026-09-28",
+        "required": true
+      },
+      "ecb_par_aaa": {
+        "source": "ECB",
+        "status": "ok",
+        "retrieved": "2026-09-29",
+        "retrieval_age_days": 1,
+        "stale": false,
+        "last_observation": "2026-09-28",
+        "required": false
+      },
+      "ecb_estr": {
+        "source": "ECB",
+        "status": "ok",
+        "retrieved": "2026-09-29",
+        "retrieval_age_days": 1,
+        "stale": false,
+        "last_observation": "2026-09-28",
+        "required": true
+      },
+      "ecb_dfr": {
+        "source": "ECB",
+        "status": "ok",
+        "retrieved": "2026-09-29",
+        "retrieval_age_days": 1,
+        "stale": false,
+        "last_observation": "2026-09-29",
+        "required": true
+      },
+      "ecb_hicp": {
+        "source": "ECB",
+        "status": "ok",
+        "retrieved": "2026-09-29",
+        "retrieval_age_days": 1,
+        "stale": false,
+        "last_observation": "2026-08",
+        "required": false
+      },
+      "ecb_spf_lt": {
+        "source": "ECB",
+        "status": "ok",
+        "retrieved": "2026-09-29",
+        "retrieval_age_days": 1,
+        "stale": false,
+        "last_observation": "2026-Q3",
+        "required": false
+      },
+      "ecb_spf_1y": {
+        "source": "ECB",
+        "status": "ok",
+        "retrieved": "2026-09-29",
+        "retrieval_age_days": 1,
+        "stale": false,
+        "last_observation": "2027-06",
+        "required": false
+      },
+      "ecb_eurusd": {
+        "source": "ECB",
+        "status": "ok",
+        "retrieved": "2026-09-29",
+        "retrieval_age_days": 1,
+        "stale": false,
+        "last_observation": "2026-09-28",
+        "required": false
+      },
+      "fred_dgs2": {
+        "source": "FRED",
+        "status": "ok",
+        "retrieved": "2026-09-29",
+        "retrieval_age_days": 1,
+        "stale": false,
+        "last_observation": "2026-09-25",
+        "required": false
+      },
+      "fred_dgs5": {
+        "source": "FRED",
+        "status": "ok",
+        "retrieved": "2026-09-29",
+        "retrieval_age_days": 1,
+        "stale": false,
+        "last_observation": "2026-09-25",
+        "required": false
+      },
+      "fred_dgs10": {
+        "source": "FRED",
+        "status": "ok",
+        "retrieved": "2026-09-29",
+        "retrieval_age_days": 1,
+        "stale": false,
+        "last_observation": "2026-09-25",
+        "required": false
+      },
+      "fred_dgs30": {
+        "source": "FRED",
+        "status": "ok",
+        "retrieved": "2026-09-29",
+        "retrieval_age_days": 1,
+        "stale": false,
+        "last_observation": "2026-09-25",
+        "required": false
+      },
+      "fred_dfedtaru": {
+        "source": "FRED",
+        "status": "ok",
+        "retrieved": "2026-09-29",
+        "retrieval_age_days": 1,
+        "stale": false,
+        "last_observation": "2026-09-28",
+        "required": false
+      },
+      "fred_dfedtarl": {
+        "source": "FRED",
+        "status": "ok",
+        "retrieved": "2026-09-29",
+        "retrieval_age_days": 1,
+        "stale": false,
+        "last_observation": "2026-09-28",
+        "required": false
+      },
+      "fred_cpiaucsl": {
+        "source": "FRED",
+        "status": "ok",
+        "retrieved": "2026-09-29",
+        "retrieval_age_days": 1,
+        "stale": false,
+        "last_observation": "2026-08-01",
+        "required": false
+      },
+      "fred_t10yie": {
+        "source": "FRED",
+        "status": "ok",
+        "retrieved": "2026-09-29",
+        "retrieval_age_days": 1,
+        "stale": false,
+        "last_observation": "2026-09-28",
+        "required": false
+      },
+      "fred_dfii10": {
+        "source": "FRED",
+        "status": "ok",
+        "retrieved": "2026-09-29",
+        "retrieval_age_days": 1,
+        "stale": false,
+        "last_observation": "2026-09-25",
+        "required": false
+      },
+      "fed_gsw": {
+        "source": "FEDBOARD",
+        "status": "ok",
+        "retrieved": "2026-09-29",
+        "retrieval_age_days": 1,
+        "stale": false,
+        "last_observation": "2026-09-18",
+        "required": false
+      }
+    },
+    "sources": {
+      "ECB Data Portal": {
+        "oldest_retrieved": "2026-09-29",
+        "stale": [],
+        "n_stale": 0,
+        "missing": [],
+        "n_missing": 0
+      },
+      "FRED": {
+        "oldest_retrieved": "2026-09-29",
+        "stale": [],
+        "n_stale": 0,
+        "missing": [],
+        "n_missing": 0
+      },
+      "Fed Board": {
+        "oldest_retrieved": "2026-09-29",
+        "stale": [],
+        "n_stale": 0,
+        "missing": [],
+        "n_missing": 0
+      }
+    }
+  }
 }

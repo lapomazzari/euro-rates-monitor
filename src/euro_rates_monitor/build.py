@@ -3,6 +3,12 @@
 The output that matters most is `metrics_latest.json`: a flat dictionary of every
 number the weekly note is allowed to use, already rounded to the precision shown in
 the note. The note generator reads only this file.
+
+The core euro analysis always runs (its inputs are required by `erm fetch`). Each
+optional section runs only if all of its inputs are cached; otherwise it is listed in
+`sections_unavailable` and none of its keys are written, so a missing section can
+never be filled with last week's numbers. `freshness` records, per series, when the
+file was retrieved and its last observation (see freshness.py).
 """
 
 from __future__ import annotations
@@ -10,14 +16,32 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass, field
+from datetime import date
 
 import numpy as np
 import pandas as pd
 
-from . import crossmarket, curve, forwards, load, paths, pca, realrates
+from . import crossmarket, curve, forwards, freshness, load, paths, pca, realrates
 from .changes import WINDOWS, change_over
+from .sources import SECTION_LABELS
 
 log = logging.getLogger(__name__)
+
+_CROSS = ["ecb_par_aaa", "fred_dgs2", "fred_dgs5", "fred_dgs10", "fred_dgs30",
+          "fred_dfedtaru", "fred_dfedtarl", "fed_gsw"]
+SECTION_INPUTS: dict[str, list[str]] = {
+    "credit": ["ecb_spot_all"],
+    "cross_market": _CROSS,
+    "fx": ["ecb_eurusd", *_CROSS],                 # FX is read against the EUR-US spread
+    "real_rates_ea": ["ecb_hicp", "ecb_spf_lt", "ecb_spf_1y"],
+    "real_rates_us": ["fred_dgs10", "fred_cpiaucsl", "fred_t10yie", "fred_dfii10"],
+}
+
+
+def available_sections() -> tuple[list[str], list[str]]:
+    """Split sections into (available, unavailable) by whether their inputs are cached."""
+    ok = [s for s, names in SECTION_INPUTS.items() if all(load.has(n) for n in names)]
+    return ok, [s for s in SECTION_INPUTS if s not in ok]
 
 
 @dataclass
@@ -26,7 +50,6 @@ class Results:
 
     as_of: pd.Timestamp
     spot_aaa: pd.DataFrame
-    spot_all: pd.DataFrame
     params_aaa: pd.DataFrame
     measures: pd.DataFrame
     dfr: pd.Series
@@ -35,12 +58,14 @@ class Results:
     path_1w: pd.DataFrame
     pca: pca.PCAResult
     anomalies: pd.DataFrame
-    par_spreads: pd.DataFrame
-    path_diff: pd.DataFrame
-    credit: pd.DataFrame
-    real: pd.DataFrame
-    fx: dict[str, object]
     turning_points: pd.DataFrame
+    unavailable: list[str] = field(default_factory=list)
+    # Optional sections: None when their inputs are unavailable.
+    par_spreads: pd.DataFrame | None = None
+    path_diff: pd.DataFrame | None = None
+    credit: pd.DataFrame | None = None
+    real: pd.DataFrame | None = None
+    fx: dict[str, object] | None = None
     metrics: dict[str, object] = field(default_factory=dict)
 
 
@@ -103,57 +128,75 @@ def _chg(s: pd.Series, scale: float = 1.0, nd: int = 0, stale: int = 5) -> dict[
     return out
 
 
-def run() -> Results:
-    """Load the cache, compute every analytic, and return them in one object."""
+def run(run_date: date | None = None) -> Results:
+    """Load the cache, compute every available analytic, and return them in one object."""
+    ok, unavailable = available_sections()
+    for sec in unavailable:
+        log.warning("section unavailable (inputs missing): %s", SECTION_LABELS[sec])
+
+    # Core euro analysis: always computed.
     spot_aaa = load.ecb_curve("ecb_spot_aaa")
-    spot_all = load.ecb_curve("ecb_spot_all")
     params = load.ecb_wide("ecb_params_aaa").dropna()
-    par_aaa = load.ecb_curve("ecb_par_aaa")
     as_of = spot_aaa.index[-1]
     dfr_full, estr = load.ecb_series("ecb_dfr"), load.ecb_series("ecb_estr")
     dfr = dfr_full[dfr_full.index <= as_of]
-
     measures = curve.curve_measures(spot_aaa)
     path = forwards.term_premium_scenarios(forwards.forward_path(params.loc[as_of]))
     wk_date = change_over(spot_aaa[10.0], WINDOWS["1w"]).base_date
     path_1w = forwards.forward_path(params.loc[wk_date])
-
     fit = pca.fit_pca(spot_aaa)
-    anomalies = pca.anomaly_table(spot_aaa, fit)
+    res = Results(as_of, spot_aaa, params, measures, dfr, estr, path, path_1w, fit,
+                  pca.anomaly_table(spot_aaa, fit), policy_turning_points(dfr_full),
+                  unavailable=unavailable)
+    inputs: dict[str, object] = {}
 
-    us_cmt = {t: load.fred_series(f"fred_dgs{t}") for t in (2, 5, 10, 30)}
-    spreads = crossmarket.par_spreads(par_aaa, {float(t): s for t, s in us_cmt.items()})
-    gsw = load.gsw().dropna(subset=["BETA0", "TAU1", "TAU2"])
-    path_diff = crossmarket.path_differential(params.loc[as_of], gsw.iloc[-1])
-    credit = crossmarket.credit_spread(spot_all, spot_aaa)
+    if "credit" in ok:
+        res.credit = crossmarket.credit_spread(load.ecb_curve("ecb_spot_all"), spot_aaa)
+    if "cross_market" in ok:
+        us_cmt = {t: load.fred_series(f"fred_dgs{t}") for t in (2, 5, 10, 30)}
+        res.par_spreads = crossmarket.par_spreads(
+            load.ecb_curve("ecb_par_aaa"), {float(t): s for t, s in us_cmt.items()})
+        gsw = load.gsw().dropna(subset=["BETA0", "TAU1", "TAU2"])
+        res.path_diff = crossmarket.path_differential(params.loc[as_of], gsw.iloc[-1])
+        inputs.update(us_cmt=us_cmt, gsw=gsw)
+    if "fx" in ok:
+        eurusd = load.ecb_series("ecb_eurusd")
+        res.fx = {"2y": crossmarket.fx_vs_differential(eurusd, res.par_spreads[2.0]),
+                  "10y": crossmarket.fx_vs_differential(eurusd, res.par_spreads[10.0])}
+        inputs["eurusd"] = eurusd
+    real = {}
+    if "real_rates_ea" in ok:
+        hicp_raw, spf_lt = load.ecb_series("ecb_hicp"), load.ecb_series("ecb_spf_lt")
+        hicp = realrates.available_from(hicp_raw, pd.DateOffset(months=1))
+        real["ea_10y_minus_hicp"] = realrates.real_rate(spot_aaa[10.0], hicp)
+        real["ea_10y_minus_spf_lt"] = realrates.real_rate(spot_aaa[10.0], spf_lt)
+        inputs.update(hicp=hicp_raw, spf_lt=spf_lt, spf_1y=load.ecb_series("ecb_spf_1y"))
+    if "real_rates_us" in ok:
+        cpi_yoy = realrates.us_cpi_yoy(load.fred_series("fred_cpiaucsl"))
+        real["us_10y_minus_cpi"] = realrates.real_rate(
+            load.fred_series("fred_dgs10"),
+            realrates.available_from(cpi_yoy, pd.DateOffset(months=1, days=14)))
+        real["us_tips_10y"] = load.fred_series("fred_dfii10")
+    if real:
+        res.real = pd.DataFrame(real)
 
-    eurusd = load.ecb_series("ecb_eurusd")
-    fx2 = crossmarket.fx_vs_differential(eurusd, spreads[2.0])
-    fx10 = crossmarket.fx_vs_differential(eurusd, spreads[10.0])
-
-    hicp = realrates.available_from(load.ecb_series("ecb_hicp"), pd.DateOffset(months=1))
-    spf_lt_raw = load.ecb_series("ecb_spf_lt")
-    cpi_yoy = realrates.us_cpi_yoy(load.fred_series("fred_cpiaucsl"))
-    real = pd.DataFrame({
-        "ea_10y_minus_hicp": realrates.real_rate(spot_aaa[10.0], hicp),
-        "ea_10y_minus_spf_lt": realrates.real_rate(spot_aaa[10.0], spf_lt_raw),
-        "us_10y_minus_cpi": realrates.real_rate(
-            us_cmt[10], realrates.available_from(cpi_yoy, pd.DateOffset(months=1, days=14))),
-        "us_tips_10y": load.fred_series("fred_dfii10"),
-    })
-
-    res = Results(as_of, spot_aaa, spot_all, params, measures, dfr, estr, path, path_1w,
-                  fit, anomalies, spreads, path_diff, credit, real,
-                  {"2y": fx2, "10y": fx10}, policy_turning_points(dfr_full))
-    res.metrics = _metrics(res, load.ecb_series("ecb_hicp"), spf_lt_raw,
-                           load.ecb_series("ecb_spf_1y"), us_cmt, gsw, eurusd)
+    res.metrics = _metrics(res, inputs)
+    per = freshness.series_freshness(run_date)
+    res.metrics["sections_unavailable"] = unavailable
+    res.metrics["freshness"] = {
+        "run_date": (run_date or date.today()).isoformat(),
+        "stale_after_days": freshness.STALE_AFTER_DAYS,
+        "series": per,
+        "sources": freshness.source_summary(per),
+    }
     return res
 
 
-def _metrics(r: Results, hicp: pd.Series, spf_lt: pd.Series, spf_1y: pd.Series,
-             us_cmt: dict[int, pd.Series], gsw: pd.DataFrame,
-             eurusd: pd.Series) -> dict[str, object]:
-    """Flat dictionary of display-rounded figures. Units are in the key names."""
+def _metrics(r: Results, inputs: dict[str, object]) -> dict[str, object]:
+    """Flat dictionary of display-rounded figures. Units are in the key names.
+
+    Keys of an unavailable section are omitted entirely.
+    """
     m: dict[str, object] = {"as_of": r.as_of.date().isoformat()}
     dfr = float(r.dfr.iloc[-1])
     estr_now = float(r.estr[r.estr.index <= r.as_of].iloc[-1])
@@ -208,6 +251,25 @@ def _metrics(r: Results, hicp: pd.Series, spf_lt: pd.Series, spf_1y: pd.Series,
     ]
 
     # 4. Cross-market ------------------------------------------------------------
+    if r.par_spreads is not None:
+        _cross_metrics(m, r, inputs)
+    if r.fx is not None:
+        _fx_metrics(m, r, inputs["eurusd"])
+    if r.credit is not None:
+        _credit_metrics(m, r)
+    if r.real is not None:
+        _real_metrics(m, r, inputs)
+
+    # Hedging context ----------------------------------------------------------
+    m["aaa_2y_minus_estr_bp"] = _r((r.spot_aaa[2.0].iloc[-1] - estr_now) * 100, 0)
+
+    # What moved: rank the week's changes by size relative to a normal week -----
+    m["top_moves_1w"] = _top_moves(r)
+    return m
+
+
+def _cross_metrics(m: dict[str, object], r: Results, inputs: dict[str, object]) -> None:
+    us_cmt, gsw = inputs["us_cmt"], inputs["gsw"]
     for t in (2.0, 10.0):
         s = r.par_spreads[t].dropna()
         m[f"eur_minus_us_{int(t)}y_par_bp"] = _r(s.iloc[-1], 0)
@@ -223,7 +285,8 @@ def _metrics(r: Results, hicp: pd.Series, spf_lt: pd.Series, spf_1y: pd.Series,
     m["eur_minus_us_fwd3m_in_1y_bp"] = _r(r.path_diff.loc[1.0, "diff_bp"], 0)
     m["eur_minus_us_3m_zero_bp"] = _r(r.path_diff.loc[0.0, "diff_bp"], 0)
 
-    # FX -------------------------------------------------------------------------
+
+def _fx_metrics(m: dict[str, object], r: Results, eurusd: pd.Series) -> None:
     fx2, fx10 = r.fx["2y"], r.fx["10y"]
     m["eurusd"] = _r(eurusd.iloc[-1], 4)
     m["eurusd_date"] = eurusd.index[-1].date().isoformat()
@@ -242,7 +305,8 @@ def _metrics(r: Results, hicp: pd.Series, spf_lt: pd.Series, spf_1y: pd.Series,
     m["eurusd_minus_fit_pct"] = _r(fx2["residual_pct"], 1)
     m["eurusd_fit_r2"] = _r(fx2["r2"], 2)
 
-    # Credit -------------------------------------------------------------------
+
+def _credit_metrics(m: dict[str, object], r: Results) -> None:
     for col in r.credit.columns:
         s = r.credit[col]
         m[f"{col}_bp"] = _r(s.iloc[-1], 0)
@@ -251,21 +315,24 @@ def _metrics(r: Results, hicp: pd.Series, spf_lt: pd.Series, spf_1y: pd.Series,
         rng = curve.range_position(s)
         m[f"{col}_1y_low_bp"], m[f"{col}_1y_high_bp"] = _r(rng["min"], 0), _r(rng["max"], 0)
 
-    # 5. Real rates --------------------------------------------------------------
-    m["hicp_yoy_pct"] = _r(hicp.iloc[-1], 1)
-    m["hicp_month"] = hicp.index[-1].strftime("%Y-%m")
-    m["spf_longer_term_pct"] = _r(spf_lt.iloc[-1], 1)
-    m["spf_survey_quarter"] = f"{spf_lt.index[-1].year}-Q{spf_lt.index[-1].quarter}"
-    m["spf_1y_ahead_pct"] = _r(spf_1y.iloc[-1], 1)
+
+def _real_metrics(m: dict[str, object], r: Results, inputs: dict[str, object]) -> None:
+    if "hicp" in inputs:
+        hicp, spf_lt = inputs["hicp"], inputs["spf_lt"]
+        m["hicp_yoy_pct"] = _r(hicp.iloc[-1], 1)
+        m["hicp_month"] = hicp.index[-1].strftime("%Y-%m")
+        m["spf_longer_term_pct"] = _r(spf_lt.iloc[-1], 1)
+        m["spf_survey_quarter"] = f"{spf_lt.index[-1].year}-Q{spf_lt.index[-1].quarter}"
+        m["spf_1y_ahead_pct"] = _r(inputs["spf_1y"].iloc[-1], 1)
     for col in r.real.columns:
         s = r.real[col].dropna()
         m[f"real_{col}_pct"] = _r(s.iloc[-1], 2)
-    m["us_breakeven_10y_pct"] = _r(load.fred_series("fred_t10yie").iloc[-1], 2)
+    if "us_tips_10y" in r.real.columns:
+        m["us_breakeven_10y_pct"] = _r(load.fred_series("fred_t10yie").iloc[-1], 2)
 
-    # Hedging context ----------------------------------------------------------
-    m["aaa_2y_minus_estr_bp"] = _r((r.spot_aaa[2.0].iloc[-1] - estr_now) * 100, 0)
 
-    # What moved: rank the week's changes by size relative to a normal week -----
+def _top_moves(r: Results) -> list[dict[str, object]]:
+    """The week's largest moves relative to a typical week over the past year."""
     cands = {
         "AAA 2Y yield": (r.spot_aaa[2.0], 100),
         "AAA 10Y yield": (r.spot_aaa[10.0], 100),
@@ -274,9 +341,10 @@ def _metrics(r: Results, hicp: pd.Series, spf_lt: pd.Series, spf_1y: pd.Series,
         "2s10s slope": (r.measures["slope_2s10s"], 1),
         "10s30s slope": (r.measures["slope_10s30s"], 1),
         "2s5s10s butterfly": (r.measures["fly_2s5s10s"], 1),
-        "EUR-US 2Y spread": (r.par_spreads[2.0].dropna(), 1),
-        "EUR-US 10Y spread": (r.par_spreads[10.0].dropna(), 1),
     }
+    if r.par_spreads is not None:
+        cands["EUR-US 2Y spread"] = (r.par_spreads[2.0].dropna(), 1)
+        cands["EUR-US 10Y spread"] = (r.par_spreads[10.0].dropna(), 1)
     ranked = []
     for label, (s, scale) in cands.items():
         ch = change_over(s, WINDOWS["1w"]).change
@@ -287,8 +355,7 @@ def _metrics(r: Results, hicp: pd.Series, spf_lt: pd.Series, spf_1y: pd.Series,
                        "latest_unit": "%" if is_yield else "bp",
                        "size_vs_typical_week": _r(abs(_weekly_z(s * scale, ch)), 1)})
     ranked.sort(key=lambda d: d["size_vs_typical_week"] or 0, reverse=True)
-    m["top_moves_1w"] = ranked[:3]
-    return m
+    return ranked[:3]
 
 
 def write(res: Results) -> None:
@@ -300,10 +367,16 @@ def write(res: Results) -> None:
     res.path.round(4).to_csv(out / "forward_path.csv", index=False)
     res.pca.loadings.round(4).to_csv(out / "pca_loadings.csv")
     res.anomalies.round(2).to_csv(out / "shape_anomalies.csv")
-    res.par_spreads.round(1).to_csv(out / "eur_minus_us_par_bp.csv")
-    res.path_diff.round(4).to_csv(out / "path_differential.csv")
-    res.credit.round(1).to_csv(out / "credit_all_minus_aaa_bp.csv")
-    res.real.round(3).to_csv(out / "real_rates.csv")
+    optional = {"eur_minus_us_par_bp.csv": (res.par_spreads, 1),
+                "path_differential.csv": (res.path_diff, 4),
+                "credit_all_minus_aaa_bp.csv": (res.credit, 1),
+                "real_rates.csv": (res.real, 3)}
+    for name, (frame, nd) in optional.items():
+        if frame is None:
+            # Remove last week's table rather than leave it looking current.
+            (out / name).unlink(missing_ok=True)
+        else:
+            frame.round(nd).to_csv(out / name)
     res.turning_points.to_csv(out / "ecb_turning_points.csv", index=False)
     text = json.dumps(res.metrics, indent=2, default=str)
     (out / "metrics_latest.json").write_text(text)

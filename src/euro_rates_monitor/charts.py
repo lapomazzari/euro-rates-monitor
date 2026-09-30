@@ -153,8 +153,30 @@ def pca_loadings(r: Results, out: Path) -> Path:
     return out / "pca_loadings.png"
 
 
+def placeholder(path: Path, title: str, message: str) -> Path:
+    """An explicit 'unavailable' image in place of a chart whose data is missing.
+
+    Leaving last week's PNG would show stale figures as if current; deleting it would
+    leave a broken image in the README. Neither is acceptable.
+    """
+    fig, ax = plt.subplots(figsize=(8, 4.5))
+    ax.axis("off")
+    ax.text(0.5, 0.58, title, ha="center", va="center", fontsize=13, fontweight="bold",
+            color=INK, transform=ax.transAxes)
+    ax.text(0.5, 0.42, message, ha="center", va="center", fontsize=10, color=INK2,
+            transform=ax.transAxes, wrap=True)
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+    return path
+
+
 def eur_us_10y(r: Results, out: Path) -> Path:
-    """EUR AAA 10Y par minus US 10Y CMT, since 2015."""
+    """EUR AAA 10Y par minus US 10Y CMT, since 2015 (placeholder if US data missing)."""
+    if r.par_spreads is None:
+        return placeholder(out / "eur_us_10y.png", "Euro AAA vs US Treasury 10-year spread",
+                           f"Unavailable for the build of {r.as_of:%d %b %Y}: the US data "
+                           "could not be downloaded\nand no cached copy exists. "
+                           "See data/raw/fetch_report.json.")
     s = r.par_spreads[10.0].dropna()
     s = s[s.index >= "2015-01-01"]
     fig, ax = plt.subplots(figsize=(8, 4.5))
