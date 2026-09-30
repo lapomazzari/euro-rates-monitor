@@ -1,0 +1,37 @@
+{
+  "backtest_min_windows": 12,
+  "bt_3m_rmse_ratio": 0.92,
+  "bt_3m_dm_p": 0.4,
+  "bt_3m_mean_err_bp": 4,
+  "bt_3m_ci_lo_bp": -3,
+  "bt_3m_ci_hi_bp": 11,
+  "bt_3m_share_pct": 19,
+  "bt_3m_windows": 87,
+  "bt_6m_rmse_ratio": 0.9,
+  "bt_6m_dm_p": 0.3,
+  "bt_6m_mean_err_bp": 7,
+  "bt_6m_ci_lo_bp": -10,
+  "bt_6m_ci_hi_bp": 23,
+  "bt_6m_share_pct": 17,
+  "bt_6m_windows": 43,
+  "bt_12m_rmse_ratio": 0.91,
+  "bt_12m_dm_p": 0.31,
+  "bt_12m_mean_err_bp": 13,
+  "bt_12m_ci_lo_bp": -27,
+  "bt_12m_ci_hi_bp": 53,
+  "bt_12m_share_pct": 19,
+  "bt_12m_windows": 21,
+  "bt_horizons_tested": [
+    3,
+    6,
+    12
+  ],
+  "bt_horizons_forwards_significantly_better": [],
+  "bt_horizons_forwards_significantly_worse": [],
+  "bt_horizons_withheld_full_sample": [
+    24
+  ],
+  "bt_lower_bound_start": "2012-07-11",
+  "bt_hiking_start": "2022-07-27",
+  "bt_first_origin": "2004-09-06"
+}

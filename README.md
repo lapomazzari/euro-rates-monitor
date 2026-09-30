@@ -1,12 +1,13 @@
 # euro-rates-monitor
 
-[![tests](https://github.com/lapomazzari/euro-rates-monitor/actions/workflows/tests.yml/badge.svg)](https://github.com/lapomazzari/euro-rates-monitor/actions/workflows/tests.yml) [![weekly-note](https://github.com/lapomazzari/euro-rates-monitor/actions/workflows/weekly-note.yml/badge.svg)](https://github.com/lapomazzari/euro-rates-monitor/actions/workflows/weekly-note.yml)
+[![tests](https://github.com/lapomazzari/euro-rates-monitor/actions/workflows/tests.yml/badge.svg)](https://github.com/lapomazzari/euro-rates-monitor/actions/workflows/tests.yml) [![weekly-data-refresh](https://github.com/lapomazzari/euro-rates-monitor/actions/workflows/weekly-data-refresh.yml/badge.svg)](https://github.com/lapomazzari/euro-rates-monitor/actions/workflows/weekly-data-refresh.yml)
 
 Tracks the euro area government curve, extracts what it prices for ECB policy, and computes the figures and chart for a one-page weekly market note.
 
 <!-- headline:start -->
 ## Headline (curve as of 28 Sep 2026)
 
+- **Forwards vs a random walk.** Since Sep 2004, the AAA curve's 3M forwards have **not beaten a naive random walk** by a statistically significant margin at any horizon tested (3M, 6M, 12M). Forward RMSE was 0.92, 0.90, 0.91 times the random walk's (Diebold-Mariano p = 0.40, 0.30, 0.31). At 24M the sample is too short for inference. See [What the forwards have been worth](#what-the-forwards-have-been-worth).
 - **ECB pricing.** The AAA curve's 3-month forwards imply a short rate of **3.42% in 1 year** and **3.46% in 2 years**, against a deposit rate of **2.50%** (92bp and 96bp above it).
   - Measured from the curve's own 3M rate (2.56%, 12bp above €STR), the 1-year forward is 86bp above today.
   - Forwards include a term premium (see [Limitations](#limitations)).
@@ -32,8 +33,9 @@ erm report           # charts -> figures/, plus a summary on stdout
 erm note             # scaffold for this week's note -> notes/<date>.md, to fill in by hand
 erm check-note notes/  # every number and date in each note must be in its figures file
 erm note --llm       # optional: Claude drafts the prose instead (needs ANTHROPIC_API_KEY)
+erm backtest         # forwards vs realised 3M rate -> data/processed/backtest_*, figures/
 erm readme           # refresh the headline at the top of this README
-pytest               # curve maths, PCA, change logic, number validator
+pytest               # curve maths, PCA, change logic, backtest, number and date check
 ```
 
 To re-run the walkthrough notebook: `pip install -e ".[notebook]"`, then open `notebooks/walkthrough.ipynb`.
@@ -56,7 +58,53 @@ The committed notes in `notes/` are written by hand from the figures `erm build`
 
 **Continuous integration.** [`tests.yml`](.github/workflows/tests.yml) runs ruff, the test suite and `erm check-note notes/` on every push. It works offline, from the committed sample and processed data.
 
-**Weekly refresh.** [`weekly-note.yml`](.github/workflows/weekly-note.yml) runs every Saturday with no repository secrets. It refreshes the data, figures and README headline and commits those; it writes that week's scaffold as a downloadable run artifact and never commits a note.
+**Weekly refresh.** [`weekly-data-refresh.yml`](.github/workflows/weekly-data-refresh.yml) runs every Saturday with no repository secrets. It refreshes the data, figures and README headline and commits those; it writes that week's scaffold as a downloadable run artifact and never commits a note.
+
+## What the forwards have been worth
+
+**The forwards have not beaten a random walk by a statistically significant margin.** From September 2004, at 3, 6 and 12 months ahead, the AAA curve's 3M forward had an RMSE 8–10% lower than simply assuming today's 3M rate persists (ratios 0.92, 0.90 and 0.91), but Diebold–Mariano tests cannot tell that apart from noise (p = 0.40, 0.30 and 0.31). The average error, forward minus realised, which is the empirical term premium, was +4bp, +7bp and +13bp. All three 95% intervals include zero, and each is about a fifth of the typical realised move over the same window. At 24 months there are only 10 independent two-year windows, so no statistic is reported.
+
+![Forecast errors over time](figures/backtest_errors.png)
+
+**Mean error, forward minus realised, in bp**, with its Newey-West 95% interval, as a share of the mean absolute realised move, and the number of non-overlapping windows:
+
+| Sample | 3M | 6M | 12M | 24M |
+|---|---|---|---|---|
+| Full sample | +4 [-3, +11]; 19% of move (87 win.) | +7 [-10, +23]; 17% of move (43 win.) | +13 [-27, +53]; 19% of move (21 win.) | withheld (10 win.) |
+| Pre-lower-bound | +19 [+2, +37]; 72% of move (31 win.) | +38 [+4, +71]; 79% of move (15 win.) | withheld (7 win.) | withheld (3 win.) |
+| Zero rates and asset purchases | -1 [-5, +2]; -15% of move (40 win.) | -4 [-14, +5]; -26% of move (20 win.) | withheld (10 win.) | withheld (5 win.) |
+| Hiking and after | -13 [-23, -2]; -33% of move (16 win.) | withheld (7 win.) | withheld (3 win.) | withheld (1 win.) |
+
+**Accuracy against the random walk**: RMSE ratio (below 1 favours the forwards) with the Diebold–Mariano p-value, and the direction hit rate against the base rate of the most common direction:
+
+| Sample | 3M | 6M | 12M | 24M |
+|---|---|---|---|---|
+| Full sample | 0.92 (p 0.40); hits 66% vs 53% (87 win.) | 0.90 (p 0.30); hits 66% vs 50% (43 win.) | 0.91 (p 0.31); hits 67% vs 51% (21 win.) | withheld (10 win.) |
+| Pre-lower-bound | 1.10 (p 0.25); hits 62% vs 57% (31 win.) | 1.08 (p 0.14); hits 56% vs 55% (15 win.) | withheld (7 win.) | withheld (3 win.) |
+| Zero rates and asset purchases | 0.75 (p 0.26); hits 60% vs 56% (40 win.) | 0.75 (p 0.25); hits 67% vs 56% (20 win.) | withheld (10 win.) | withheld (5 win.) |
+| Hiking and after | 0.56 (p 0.06); hits 85% vs 62% (16 win.) | withheld (7 win.) | withheld (3 win.) | withheld (1 win.) |
+
+**What this supports:**
+- Over two decades, the AAA forwards were not a reliably better forecast of the 3M rate than no change. The point estimates favour them, but not by more than chance allows.
+- The premium is not stable across regimes:
+  - *Before 2012:* forwards sat above the outcome on average (+19bp at 3M, +38bp at 6M; both intervals exclude zero, and so do the bootstrap intervals).
+  - *Zero-rate years:* the premium was indistinguishable from zero, mostly because the rate barely moved.
+  - *Since the July 2022 hike:* the 3M forward has undershot by 13bp on average. That is a negative ex-post error: the curve underpriced the hikes.
+- The forwards got the direction right about two-thirds of the time, against a base rate near one half. This is descriptive only; no test is applied to it.
+
+**What it does not support:**
+- An estimate of today's term premium to subtract from today's forwards.
+- A claim that forwards are useless.
+- Any statement at 24 months, where the errors are large and dominated by two episodes: forwards about 460bp too high in mid-2008 and about 450bp too low in late 2021 (see the chart).
+- Eight cells are tested. With that many tests, one p-value near 0.06 (the hiking-period 3M cell) is what chance alone would often produce.
+
+**Method.** At each date, the 3M forward starting in h months (from `forwards.py`, the same code the live tool uses) is compared with the published AAA 3M rate h calendar months later. The random walk predicts today's 3M rate and is scored on the same dates.
+- *Standard errors:* errors from overlapping h-month windows are autocorrelated, so they use Newey-West with lag h, with a moving-block bootstrap as a cross-check (both in `data/processed/backtest_summary.csv`).
+- *Withheld cells:* no statistic is reported below 12 non-overlapping windows. That threshold is a judgement call, and the window count is printed in every cell.
+- *Monthly statistics, daily chart:* statistics use month-end forecast dates, while the chart plots every day. That is why the chart is denser than the tables: consecutive daily forecasts share almost all of their window, so they add little independent information.
+- *Regimes:* derived from the deposit rate and assigned by forecast date.
+- *Direction hit rate:* excludes cases where the rate moved less than 5bp.
+- *Refresh:* run `erm backtest` to update the results. It also writes the daily errors behind the chart to `data/processed/backtest_errors.csv`. That file is generated and not committed; only the summary is.
 
 ## Method
 
@@ -113,6 +161,9 @@ Current values are in `data/processed/metrics_latest.json`.
   - Model estimates have been negative in some periods (e.g. during large-scale asset purchases).
 
   The k = 0/10/20bp-per-year lines are a sensitivity illustration, not an estimate. Read the path as "what is priced", not "what the market expects".
+- **Overlapping windows in the backtest.** Monthly forecasts of a 12-month outcome share 11 months of their window, so the errors are strongly autocorrelated. Standard errors computed as if the observations were independent would be several times too small. Newey-West and the block bootstrap correct for this only approximately, and both become unreliable with few independent windows. That is why cells with fewer than 12 are withheld.
+- **A short sample relative to rate cycles.** About 22 years of data hold three or four ECB cycles, so a handful of episodes (2008, the 2011 hikes, 2022) drive the averages. One more surprise of that size could change the conclusions. The 24-month horizon has only 10 independent windows in total.
+- **A past premium is not the current one.** The backtest's average error mixes the term premium with surprises in the rate path and with changes in the gap between bills and €STR. It also changed sign across regimes. It is an average of the past, not an estimate of the premium in today's curve, and it does not calibrate the k = 10/20bp sensitivity lines.
 - **Government curve, not OIS.** Desks read ECB pricing from €STR swaps and ECB-dated €STR forwards, which have no stable free source. Government bills and bonds can trade away from €STR because of collateral scarcity and supply; the gap reached several tens of bp in 2022. The note prints today's gap between the 3M AAA rate and €STR, and the path relative to the curve's own 3M rate. That removes a *constant* gap, not a changing one.
 - **AAA vs all-issuer curves.**
   - The AAA curve uses only bonds rated AAA by Fitch. Its country composition changes when ratings change, which moves the curve (and the AAA vs all-issuer spread) without any market move.
@@ -130,7 +181,7 @@ Current values are in `data/processed/metrics_latest.json`.
 
 - **Sources:** every series, with identifier, source, URL and licence, is listed in [SOURCES.md](SOURCES.md), which is generated from [`sources.py`](src/euro_rates_monitor/sources.py).
 - **Licences:** ECB statistics may be reused with the source quoted; US series are public domain.
-- **What is committed:** the raw cache (about 36MB) is not committed. `data/sample/` holds the last 60 observations of each raw file, unmodified. `data/processed/` holds the derived tables.
+- **What is committed:** the raw cache (about 36MB) is not committed. `data/sample/` holds the last 60 observations of each raw file, unmodified. `data/processed/` holds the derived tables, except the daily backtest errors, which `erm backtest` regenerates.
 - **Left out:** swap rates, Bund futures and euro area inflation swaps, because no stable free source with clear terms exists. They are not approximated.
 
 **Possible extension: individual Bund yields.** The Bundesbank publishes daily *observed* yields of the current 2/5/7/10/15/20/30Y Federal securities through a free API (dataflow `BBSSY`, e.g. `BBSSY/D.REN.EUR.A630.000000WT1010.A` for the 10Y, back to 2001, with the current ISIN in the metadata). That would allow a genuine bond-versus-curve comparison. Caveats:
@@ -151,11 +202,12 @@ src/euro_rates_monitor/
   crossmarket.py  EUR vs US, EUR/USD vs differentials, AAA vs all-issuer
   realrates.py    realised and survey-based real rates
   changes.py      holiday-robust 1w / 1m changes
+  backtest.py     forwards vs realised 3M rate, Newey-West, regimes
   build.py        runs everything, writes data/processed/ and metrics_latest.json
   headline.py     README headline from the latest metrics (erm readme)
   charts.py       the five charts
   note.py         scaffold, optional LLM draft, number and date check (check-note)
-  cli.py          erm fetch | build | report | readme | note | check-note | sources
+  cli.py          erm fetch | build | report | backtest | readme | note | check-note | sources
 tests/            pytest suite
 notebooks/        walkthrough.ipynb: each calculation step by step
 scripts/          make_sample.py
