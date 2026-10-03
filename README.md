@@ -5,15 +5,15 @@
 Tracks the euro area government curve, extracts what it prices for ECB policy, and computes the figures and chart for a one-page weekly market note.
 
 <!-- headline:start -->
-## Headline (curve as of 28 Sep 2026)
+## Headline (curve as of 1 Oct 2026)
 
 - **Forwards vs a random walk.** Since Sep 2004, the AAA curve's 3M forwards have **not beaten a naive random walk** by a statistically significant margin at any horizon tested (3M, 6M, 12M). Forward RMSE was 0.92, 0.90, 0.91 times the random walk's (Diebold-Mariano p = 0.40, 0.30, 0.31). At 24M the sample is too short for inference. See [What the forwards have been worth](#what-the-forwards-have-been-worth).
-- **ECB pricing.** The AAA curve's 3-month forwards imply a short rate of **3.42% in 1 year** and **3.46% in 2 years**, against a deposit rate of **2.50%** (92bp and 96bp above it).
-  - Measured from the curve's own 3M rate (2.56%, 12bp above €STR), the 1-year forward is 86bp above today.
+- **ECB pricing.** The AAA curve's 3-month forwards imply a short rate of **3.27% in 1 year** and **3.29% in 2 years**, against a deposit rate of **2.50%** (77bp and 79bp above it).
+  - Measured from the curve's own 3M rate (2.51%, 7bp above €STR), the 1-year forward is 76bp above today.
   - Forwards include a term premium (see [Limitations](#limitations)).
-- **Curve level.** The 10Y AAA yield is **3.63%**, at the top of its one-year range.
+- **Curve level.** The 10Y AAA yield is **3.59%**, near the top of its one-year range.
 - **Sovereign spread.** The all-issuer vs AAA spread at 10Y is **50bp**, at its one-year high.
-- **Data retrieved.** ECB Data Portal 2026-09-30; FRED 2026-09-30; Fed Board 2026-09-30. Stale = retrieved more than 3 days before this build (run 2026-09-30).
+- **Data retrieved.** ECB Data Portal 2026-09-30; FRED 2026-09-30; Fed Board 2026-09-30. Stale = retrieved more than 3 days before this build (run 2026-10-03).
 <!-- headline:end -->
 
 Notes: [`notes/`](notes/). The headline above is regenerated each week by `erm readme`.
