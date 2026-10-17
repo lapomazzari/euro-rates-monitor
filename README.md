@@ -5,15 +5,15 @@
 Tracks the euro area government curve, extracts what it prices for ECB policy, and computes the figures and chart for a one-page weekly market note.
 
 <!-- headline:start -->
-## Headline (curve as of 8 Oct 2026)
+## Headline (curve as of 15 Oct 2026)
 
 - **Forwards vs a random walk.** Since Sep 2004, the AAA curve's 3M forwards have **not beaten a naive random walk** by a statistically significant margin at any horizon tested (3M, 6M, 12M). Forward RMSE was 0.92, 0.90, 0.91 times the random walk's (Diebold-Mariano p = 0.40, 0.30, 0.31). At 24M the sample is too short for inference. See [What the forwards have been worth](#what-the-forwards-have-been-worth).
-- **ECB pricing.** The AAA curve's 3-month forwards imply a short rate of **3.17% in 1 year** and **3.19% in 2 years**, against a deposit rate of **2.50%** (67bp and 69bp above it).
-  - Measured from the curve's own 3M rate (2.53%, 9bp above €STR), the 1-year forward is 64bp above today.
+- **ECB pricing.** The AAA curve's 3-month forwards imply a short rate of **3.11% in 1 year** and **3.10% in 2 years**, against a deposit rate of **2.50%** (61bp and 60bp above it).
+  - Measured from the curve's own 3M rate (2.58%, 14bp above €STR), the 1-year forward is 52bp above today.
   - Forwards include a term premium (see [Limitations](#limitations)).
-- **Curve level.** The 10Y AAA yield is **3.52%**, 89% of the way from its one-year low to its high.
+- **Curve level.** The 10Y AAA yield is **3.39%**, 76% of the way from its one-year low to its high.
 - **Sovereign spread.** The all-issuer vs AAA spread at 10Y is **61bp**, within its one-year range of 34-65bp.
-- **Data retrieved.** ECB Data Portal 2026-10-10; FRED 2026-10-10; Fed Board 2026-10-10. Stale = retrieved more than 3 days before this build (run 2026-10-10).
+- **Data retrieved.** ECB Data Portal 2026-10-17; FRED 2026-10-17; Fed Board 2026-10-17. Stale = retrieved more than 3 days before this build (run 2026-10-17).
 <!-- headline:end -->
 
 Notes: [`notes/`](notes/). The headline above is regenerated each week by `erm readme`.
