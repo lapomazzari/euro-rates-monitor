@@ -5,15 +5,15 @@
 Tracks the euro area government curve, extracts what it prices for ECB policy, and computes the figures and chart for a one-page weekly market note.
 
 <!-- headline:start -->
-## Headline (curve as of 12 Nov 2026)
+## Headline (curve as of 19 Nov 2026)
 
 - **Forwards vs a random walk.** Since Sep 2004, the AAA curve's 3M forwards have **not beaten a naive random walk** by a statistically significant margin at any horizon tested (3M, 6M, 12M). Forward RMSE was 0.92, 0.90, 0.91 times the random walk's (Diebold-Mariano p = 0.40, 0.30, 0.31). At 24M the sample is too short for inference. See [What the forwards have been worth](#what-the-forwards-have-been-worth).
-- **ECB pricing.** The AAA curve's 3-month forwards imply a short rate of **3.20% in 1 year** and **3.15% in 2 years**, against a deposit rate of **2.50%** (70bp and 65bp above it).
-  - Measured from the curve's own 3M rate (2.64%, 19bp above €STR), the 1-year forward is 57bp above today.
+- **ECB pricing.** The AAA curve's 3-month forwards imply a short rate of **3.26% in 1 year** and **3.20% in 2 years**, against a deposit rate of **2.50%** (76bp and 70bp above it).
+  - Measured from the curve's own 3M rate (2.67%, 23bp above €STR), the 1-year forward is 59bp above today.
   - Forwards include a term premium (see [Limitations](#limitations)).
-- **Curve level.** The 10Y AAA yield is **3.37%**, 71% of the way from its one-year low to its high.
-- **Sovereign spread.** The all-issuer vs AAA spread at 10Y is **58bp**, within its one-year range of 34-72bp.
-- **Data retrieved.** ECB Data Portal 2026-11-14; FRED 2026-11-14; Fed Board 2026-11-14. Stale = retrieved more than 3 days before this build (run 2026-11-14).
+- **Curve level.** The 10Y AAA yield is **3.44%**, 79% of the way from its one-year low to its high.
+- **Sovereign spread.** The all-issuer vs AAA spread at 10Y is **60bp**, within its one-year range of 34-72bp.
+- **Data retrieved.** ECB Data Portal 2026-11-21; FRED 2026-11-21; Fed Board 2026-11-21. Stale = retrieved more than 3 days before this build (run 2026-11-21).
 <!-- headline:end -->
 
 Notes: [`notes/`](notes/). The headline above is regenerated each week by `erm readme`.
